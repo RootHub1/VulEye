@@ -29,17 +29,20 @@
 > 
 > **You are solely responsible for your actions.** This tool includes ethical warnings but does not protect you from prosecution.
 
---
-
-
 ## Installation
 
-```bash
+
+```
+BASH
 git clone https://github.com/Kyni-lover2004/VulEye
 cd VulEye
-cd VulEye
 chmod +x main.py
+python3 main.py
+```
 
+
+
+---
 
 ## 🎯 Project Overview
 
