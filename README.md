@@ -69,7 +69,8 @@ VulEye/
 ├── main.py                # Unified menu interface
 ├── reports/               # Auto-generated security reports (JSON/TXT)
 ├── core/
-│   ├── __init__.py
+│   ├── server_did.py  
+│   ├── web_analysts.py 
 │   └── help.py            # Complete usage guide & legal warnings
 ├── modules/
 │   ├── web/               # Web application vulnerabilities
