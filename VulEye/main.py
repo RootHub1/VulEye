@@ -3,6 +3,10 @@ import sys
 import importlib
 from datetime import datetime
 
+script_dir = os.path.dirname(os.path.abspath(__file__))
+os.chdir(script_dir)
+print(f"[DEBUG] Working directory set to: {os.getcwd()}")
+
 if not os.path.exists('reports'):
     os.makedirs('reports')
     print(f"[+] Created reports directory at {os.path.abspath('reports')}")
