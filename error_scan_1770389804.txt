@@ -1,0 +1,729 @@
+================================================================================
+ERROR MESSAGE DISCLOSURE SCAN REPORT
+================================================================================
+
+Target: http://testphp.vulnweb.com/
+Scan Date: 2026-02-06 16:56:44
+Total Tests: 44
+Vulnerabilities Found: 44
+
+SEVERITY BREAKDOWN:
+  Critical: 0
+  High: 44
+  Medium: 0
+  Low: 88
+
+DETAILED FINDINGS:
+
+1. Stack Trace Disclosure (HIGH)
+   Pattern: in 
+   Context: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html><!-- InstanceBegin template="/Templates/main_dynamic_template.dwt.php" codeOutsideHTMLIsLocked="false" -->
+<head>
+<meta http-equiv="Content-Type" content="text/html; cha
+
+2. Server Header Disclosure (LOW)
+   Pattern: nginx/1.19.0
+   Context: Server: nginx/1.19.0
+
+3. Technology Stack Disclosure (LOW)
+   Pattern: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+   Context: X-Powered-By: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+
+4. Stack Trace Disclosure (HIGH)
+   Pattern: in 
+   Context: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html><!-- InstanceBegin template="/Templates/main_dynamic_template.dwt.php" codeOutsideHTMLIsLocked="false" -->
+<head>
+<meta http-equiv="Content-Type" content="text/html; cha
+
+5. Server Header Disclosure (LOW)
+   Pattern: nginx/1.19.0
+   Context: Server: nginx/1.19.0
+
+6. Technology Stack Disclosure (LOW)
+   Pattern: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+   Context: X-Powered-By: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+
+7. Stack Trace Disclosure (HIGH)
+   Pattern: in 
+   Context: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html><!-- InstanceBegin template="/Templates/main_dynamic_template.dwt.php" codeOutsideHTMLIsLocked="false" -->
+<head>
+<meta http-equiv="Content-Type" content="text/html; cha
+
+8. Server Header Disclosure (LOW)
+   Pattern: nginx/1.19.0
+   Context: Server: nginx/1.19.0
+
+9. Technology Stack Disclosure (LOW)
+   Pattern: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+   Context: X-Powered-By: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+
+10. Stack Trace Disclosure (HIGH)
+   Pattern: in 
+   Context: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html><!-- InstanceBegin template="/Templates/main_dynamic_template.dwt.php" codeOutsideHTMLIsLocked="false" -->
+<head>
+<meta http-equiv="Content-Type" content="text/html; cha
+
+11. Server Header Disclosure (LOW)
+   Pattern: nginx/1.19.0
+   Context: Server: nginx/1.19.0
+
+12. Technology Stack Disclosure (LOW)
+   Pattern: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+   Context: X-Powered-By: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+
+13. Stack Trace Disclosure (HIGH)
+   Pattern: in 
+   Context: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html><!-- InstanceBegin template="/Templates/main_dynamic_template.dwt.php" codeOutsideHTMLIsLocked="false" -->
+<head>
+<meta http-equiv="Content-Type" content="text/html; cha
+
+14. Server Header Disclosure (LOW)
+   Pattern: nginx/1.19.0
+   Context: Server: nginx/1.19.0
+
+15. Technology Stack Disclosure (LOW)
+   Pattern: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+   Context: X-Powered-By: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+
+16. Stack Trace Disclosure (HIGH)
+   Pattern: in 
+   Context: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html><!-- InstanceBegin template="/Templates/main_dynamic_template.dwt.php" codeOutsideHTMLIsLocked="false" -->
+<head>
+<meta http-equiv="Content-Type" content="text/html; cha
+
+17. Server Header Disclosure (LOW)
+   Pattern: nginx/1.19.0
+   Context: Server: nginx/1.19.0
+
+18. Technology Stack Disclosure (LOW)
+   Pattern: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+   Context: X-Powered-By: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+
+19. Stack Trace Disclosure (HIGH)
+   Pattern: in 
+   Context: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html><!-- InstanceBegin template="/Templates/main_dynamic_template.dwt.php" codeOutsideHTMLIsLocked="false" -->
+<head>
+<meta http-equiv="Content-Type" content="text/html; cha
+
+20. Server Header Disclosure (LOW)
+   Pattern: nginx/1.19.0
+   Context: Server: nginx/1.19.0
+
+21. Technology Stack Disclosure (LOW)
+   Pattern: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+   Context: X-Powered-By: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+
+22. Stack Trace Disclosure (HIGH)
+   Pattern: in 
+   Context: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html><!-- InstanceBegin template="/Templates/main_dynamic_template.dwt.php" codeOutsideHTMLIsLocked="false" -->
+<head>
+<meta http-equiv="Content-Type" content="text/html; cha
+
+23. Server Header Disclosure (LOW)
+   Pattern: nginx/1.19.0
+   Context: Server: nginx/1.19.0
+
+24. Technology Stack Disclosure (LOW)
+   Pattern: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+   Context: X-Powered-By: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+
+25. Stack Trace Disclosure (HIGH)
+   Pattern: in 
+   Context: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html><!-- InstanceBegin template="/Templates/main_dynamic_template.dwt.php" codeOutsideHTMLIsLocked="false" -->
+<head>
+<meta http-equiv="Content-Type" content="text/html; cha
+
+26. Server Header Disclosure (LOW)
+   Pattern: nginx/1.19.0
+   Context: Server: nginx/1.19.0
+
+27. Technology Stack Disclosure (LOW)
+   Pattern: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+   Context: X-Powered-By: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+
+28. Stack Trace Disclosure (HIGH)
+   Pattern: in 
+   Context: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html><!-- InstanceBegin template="/Templates/main_dynamic_template.dwt.php" codeOutsideHTMLIsLocked="false" -->
+<head>
+<meta http-equiv="Content-Type" content="text/html; cha
+
+29. Server Header Disclosure (LOW)
+   Pattern: nginx/1.19.0
+   Context: Server: nginx/1.19.0
+
+30. Technology Stack Disclosure (LOW)
+   Pattern: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+   Context: X-Powered-By: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+
+31. Stack Trace Disclosure (HIGH)
+   Pattern: in 
+   Context: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html><!-- InstanceBegin template="/Templates/main_dynamic_template.dwt.php" codeOutsideHTMLIsLocked="false" -->
+<head>
+<meta http-equiv="Content-Type" content="text/html; cha
+
+32. Server Header Disclosure (LOW)
+   Pattern: nginx/1.19.0
+   Context: Server: nginx/1.19.0
+
+33. Technology Stack Disclosure (LOW)
+   Pattern: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+   Context: X-Powered-By: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+
+34. Stack Trace Disclosure (HIGH)
+   Pattern: in 
+   Context: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html><!-- InstanceBegin template="/Templates/main_dynamic_template.dwt.php" codeOutsideHTMLIsLocked="false" -->
+<head>
+<meta http-equiv="Content-Type" content="text/html; cha
+
+35. Server Header Disclosure (LOW)
+   Pattern: nginx/1.19.0
+   Context: Server: nginx/1.19.0
+
+36. Technology Stack Disclosure (LOW)
+   Pattern: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+   Context: X-Powered-By: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+
+37. Stack Trace Disclosure (HIGH)
+   Pattern: in 
+   Context: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html><!-- InstanceBegin template="/Templates/main_dynamic_template.dwt.php" codeOutsideHTMLIsLocked="false" -->
+<head>
+<meta http-equiv="Content-Type" content="text/html; cha
+
+38. Server Header Disclosure (LOW)
+   Pattern: nginx/1.19.0
+   Context: Server: nginx/1.19.0
+
+39. Technology Stack Disclosure (LOW)
+   Pattern: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+   Context: X-Powered-By: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+
+40. Stack Trace Disclosure (HIGH)
+   Pattern: in 
+   Context: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html><!-- InstanceBegin template="/Templates/main_dynamic_template.dwt.php" codeOutsideHTMLIsLocked="false" -->
+<head>
+<meta http-equiv="Content-Type" content="text/html; cha
+
+41. Server Header Disclosure (LOW)
+   Pattern: nginx/1.19.0
+   Context: Server: nginx/1.19.0
+
+42. Technology Stack Disclosure (LOW)
+   Pattern: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+   Context: X-Powered-By: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+
+43. Stack Trace Disclosure (HIGH)
+   Pattern: in 
+   Context: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html><!-- InstanceBegin template="/Templates/main_dynamic_template.dwt.php" codeOutsideHTMLIsLocked="false" -->
+<head>
+<meta http-equiv="Content-Type" content="text/html; cha
+
+44. Server Header Disclosure (LOW)
+   Pattern: nginx/1.19.0
+   Context: Server: nginx/1.19.0
+
+45. Technology Stack Disclosure (LOW)
+   Pattern: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+   Context: X-Powered-By: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+
+46. Stack Trace Disclosure (HIGH)
+   Pattern: in 
+   Context: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html><!-- InstanceBegin template="/Templates/main_dynamic_template.dwt.php" codeOutsideHTMLIsLocked="false" -->
+<head>
+<meta http-equiv="Content-Type" content="text/html; cha
+
+47. Server Header Disclosure (LOW)
+   Pattern: nginx/1.19.0
+   Context: Server: nginx/1.19.0
+
+48. Technology Stack Disclosure (LOW)
+   Pattern: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+   Context: X-Powered-By: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+
+49. Stack Trace Disclosure (HIGH)
+   Pattern: in 
+   Context: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html><!-- InstanceBegin template="/Templates/main_dynamic_template.dwt.php" codeOutsideHTMLIsLocked="false" -->
+<head>
+<meta http-equiv="Content-Type" content="text/html; cha
+
+50. Server Header Disclosure (LOW)
+   Pattern: nginx/1.19.0
+   Context: Server: nginx/1.19.0
+
+51. Technology Stack Disclosure (LOW)
+   Pattern: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+   Context: X-Powered-By: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+
+52. Stack Trace Disclosure (HIGH)
+   Pattern: in 
+   Context: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html><!-- InstanceBegin template="/Templates/main_dynamic_template.dwt.php" codeOutsideHTMLIsLocked="false" -->
+<head>
+<meta http-equiv="Content-Type" content="text/html; cha
+
+53. Server Header Disclosure (LOW)
+   Pattern: nginx/1.19.0
+   Context: Server: nginx/1.19.0
+
+54. Technology Stack Disclosure (LOW)
+   Pattern: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+   Context: X-Powered-By: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+
+55. Stack Trace Disclosure (HIGH)
+   Pattern: in 
+   Context: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html><!-- InstanceBegin template="/Templates/main_dynamic_template.dwt.php" codeOutsideHTMLIsLocked="false" -->
+<head>
+<meta http-equiv="Content-Type" content="text/html; cha
+
+56. Server Header Disclosure (LOW)
+   Pattern: nginx/1.19.0
+   Context: Server: nginx/1.19.0
+
+57. Technology Stack Disclosure (LOW)
+   Pattern: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+   Context: X-Powered-By: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+
+58. Stack Trace Disclosure (HIGH)
+   Pattern: in 
+   Context: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html><!-- InstanceBegin template="/Templates/main_dynamic_template.dwt.php" codeOutsideHTMLIsLocked="false" -->
+<head>
+<meta http-equiv="Content-Type" content="text/html; cha
+
+59. Server Header Disclosure (LOW)
+   Pattern: nginx/1.19.0
+   Context: Server: nginx/1.19.0
+
+60. Technology Stack Disclosure (LOW)
+   Pattern: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+   Context: X-Powered-By: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+
+61. Stack Trace Disclosure (HIGH)
+   Pattern: in 
+   Context: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html><!-- InstanceBegin template="/Templates/main_dynamic_template.dwt.php" codeOutsideHTMLIsLocked="false" -->
+<head>
+<meta http-equiv="Content-Type" content="text/html; cha
+
+62. Server Header Disclosure (LOW)
+   Pattern: nginx/1.19.0
+   Context: Server: nginx/1.19.0
+
+63. Technology Stack Disclosure (LOW)
+   Pattern: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+   Context: X-Powered-By: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+
+64. Stack Trace Disclosure (HIGH)
+   Pattern: in 
+   Context: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html><!-- InstanceBegin template="/Templates/main_dynamic_template.dwt.php" codeOutsideHTMLIsLocked="false" -->
+<head>
+<meta http-equiv="Content-Type" content="text/html; cha
+
+65. Server Header Disclosure (LOW)
+   Pattern: nginx/1.19.0
+   Context: Server: nginx/1.19.0
+
+66. Technology Stack Disclosure (LOW)
+   Pattern: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+   Context: X-Powered-By: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+
+67. Stack Trace Disclosure (HIGH)
+   Pattern: in 
+   Context: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html><!-- InstanceBegin template="/Templates/main_dynamic_template.dwt.php" codeOutsideHTMLIsLocked="false" -->
+<head>
+<meta http-equiv="Content-Type" content="text/html; cha
+
+68. Server Header Disclosure (LOW)
+   Pattern: nginx/1.19.0
+   Context: Server: nginx/1.19.0
+
+69. Technology Stack Disclosure (LOW)
+   Pattern: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+   Context: X-Powered-By: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+
+70. Stack Trace Disclosure (HIGH)
+   Pattern: in 
+   Context: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html><!-- InstanceBegin template="/Templates/main_dynamic_template.dwt.php" codeOutsideHTMLIsLocked="false" -->
+<head>
+<meta http-equiv="Content-Type" content="text/html; cha
+
+71. Server Header Disclosure (LOW)
+   Pattern: nginx/1.19.0
+   Context: Server: nginx/1.19.0
+
+72. Technology Stack Disclosure (LOW)
+   Pattern: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+   Context: X-Powered-By: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+
+73. Stack Trace Disclosure (HIGH)
+   Pattern: in 
+   Context: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html><!-- InstanceBegin template="/Templates/main_dynamic_template.dwt.php" codeOutsideHTMLIsLocked="false" -->
+<head>
+<meta http-equiv="Content-Type" content="text/html; cha
+
+74. Server Header Disclosure (LOW)
+   Pattern: nginx/1.19.0
+   Context: Server: nginx/1.19.0
+
+75. Technology Stack Disclosure (LOW)
+   Pattern: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+   Context: X-Powered-By: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+
+76. Stack Trace Disclosure (HIGH)
+   Pattern: in 
+   Context: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html><!-- InstanceBegin template="/Templates/main_dynamic_template.dwt.php" codeOutsideHTMLIsLocked="false" -->
+<head>
+<meta http-equiv="Content-Type" content="text/html; cha
+
+77. Server Header Disclosure (LOW)
+   Pattern: nginx/1.19.0
+   Context: Server: nginx/1.19.0
+
+78. Technology Stack Disclosure (LOW)
+   Pattern: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+   Context: X-Powered-By: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+
+79. Stack Trace Disclosure (HIGH)
+   Pattern: in 
+   Context: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html><!-- InstanceBegin template="/Templates/main_dynamic_template.dwt.php" codeOutsideHTMLIsLocked="false" -->
+<head>
+<meta http-equiv="Content-Type" content="text/html; cha
+
+80. Server Header Disclosure (LOW)
+   Pattern: nginx/1.19.0
+   Context: Server: nginx/1.19.0
+
+81. Technology Stack Disclosure (LOW)
+   Pattern: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+   Context: X-Powered-By: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+
+82. Stack Trace Disclosure (HIGH)
+   Pattern: in 
+   Context: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html><!-- InstanceBegin template="/Templates/main_dynamic_template.dwt.php" codeOutsideHTMLIsLocked="false" -->
+<head>
+<meta http-equiv="Content-Type" content="text/html; cha
+
+83. Server Header Disclosure (LOW)
+   Pattern: nginx/1.19.0
+   Context: Server: nginx/1.19.0
+
+84. Technology Stack Disclosure (LOW)
+   Pattern: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+   Context: X-Powered-By: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+
+85. Stack Trace Disclosure (HIGH)
+   Pattern: in 
+   Context: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html><!-- InstanceBegin template="/Templates/main_dynamic_template.dwt.php" codeOutsideHTMLIsLocked="false" -->
+<head>
+<meta http-equiv="Content-Type" content="text/html; cha
+
+86. Server Header Disclosure (LOW)
+   Pattern: nginx/1.19.0
+   Context: Server: nginx/1.19.0
+
+87. Technology Stack Disclosure (LOW)
+   Pattern: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+   Context: X-Powered-By: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+
+88. Stack Trace Disclosure (HIGH)
+   Pattern: in 
+   Context: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html><!-- InstanceBegin template="/Templates/main_dynamic_template.dwt.php" codeOutsideHTMLIsLocked="false" -->
+<head>
+<meta http-equiv="Content-Type" content="text/html; cha
+
+89. Server Header Disclosure (LOW)
+   Pattern: nginx/1.19.0
+   Context: Server: nginx/1.19.0
+
+90. Technology Stack Disclosure (LOW)
+   Pattern: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+   Context: X-Powered-By: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+
+91. Stack Trace Disclosure (HIGH)
+   Pattern: in 
+   Context: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html><!-- InstanceBegin template="/Templates/main_dynamic_template.dwt.php" codeOutsideHTMLIsLocked="false" -->
+<head>
+<meta http-equiv="Content-Type" content="text/html; cha
+
+92. Server Header Disclosure (LOW)
+   Pattern: nginx/1.19.0
+   Context: Server: nginx/1.19.0
+
+93. Technology Stack Disclosure (LOW)
+   Pattern: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+   Context: X-Powered-By: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+
+94. Stack Trace Disclosure (HIGH)
+   Pattern: in 
+   Context: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html><!-- InstanceBegin template="/Templates/main_dynamic_template.dwt.php" codeOutsideHTMLIsLocked="false" -->
+<head>
+<meta http-equiv="Content-Type" content="text/html; cha
+
+95. Server Header Disclosure (LOW)
+   Pattern: nginx/1.19.0
+   Context: Server: nginx/1.19.0
+
+96. Technology Stack Disclosure (LOW)
+   Pattern: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+   Context: X-Powered-By: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+
+97. Stack Trace Disclosure (HIGH)
+   Pattern: in 
+   Context: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html><!-- InstanceBegin template="/Templates/main_dynamic_template.dwt.php" codeOutsideHTMLIsLocked="false" -->
+<head>
+<meta http-equiv="Content-Type" content="text/html; cha
+
+98. Server Header Disclosure (LOW)
+   Pattern: nginx/1.19.0
+   Context: Server: nginx/1.19.0
+
+99. Technology Stack Disclosure (LOW)
+   Pattern: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+   Context: X-Powered-By: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+
+100. Stack Trace Disclosure (HIGH)
+   Pattern: in 
+   Context: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html><!-- InstanceBegin template="/Templates/main_dynamic_template.dwt.php" codeOutsideHTMLIsLocked="false" -->
+<head>
+<meta http-equiv="Content-Type" content="text/html; cha
+
+101. Server Header Disclosure (LOW)
+   Pattern: nginx/1.19.0
+   Context: Server: nginx/1.19.0
+
+102. Technology Stack Disclosure (LOW)
+   Pattern: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+   Context: X-Powered-By: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+
+103. Stack Trace Disclosure (HIGH)
+   Pattern: in 
+   Context: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html><!-- InstanceBegin template="/Templates/main_dynamic_template.dwt.php" codeOutsideHTMLIsLocked="false" -->
+<head>
+<meta http-equiv="Content-Type" content="text/html; cha
+
+104. Server Header Disclosure (LOW)
+   Pattern: nginx/1.19.0
+   Context: Server: nginx/1.19.0
+
+105. Technology Stack Disclosure (LOW)
+   Pattern: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+   Context: X-Powered-By: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+
+106. Stack Trace Disclosure (HIGH)
+   Pattern: in 
+   Context: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html><!-- InstanceBegin template="/Templates/main_dynamic_template.dwt.php" codeOutsideHTMLIsLocked="false" -->
+<head>
+<meta http-equiv="Content-Type" content="text/html; cha
+
+107. Server Header Disclosure (LOW)
+   Pattern: nginx/1.19.0
+   Context: Server: nginx/1.19.0
+
+108. Technology Stack Disclosure (LOW)
+   Pattern: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+   Context: X-Powered-By: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+
+109. Stack Trace Disclosure (HIGH)
+   Pattern: in 
+   Context: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html><!-- InstanceBegin template="/Templates/main_dynamic_template.dwt.php" codeOutsideHTMLIsLocked="false" -->
+<head>
+<meta http-equiv="Content-Type" content="text/html; cha
+
+110. Server Header Disclosure (LOW)
+   Pattern: nginx/1.19.0
+   Context: Server: nginx/1.19.0
+
+111. Technology Stack Disclosure (LOW)
+   Pattern: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+   Context: X-Powered-By: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+
+112. Stack Trace Disclosure (HIGH)
+   Pattern: in 
+   Context: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html><!-- InstanceBegin template="/Templates/main_dynamic_template.dwt.php" codeOutsideHTMLIsLocked="false" -->
+<head>
+<meta http-equiv="Content-Type" content="text/html; cha
+
+113. Server Header Disclosure (LOW)
+   Pattern: nginx/1.19.0
+   Context: Server: nginx/1.19.0
+
+114. Technology Stack Disclosure (LOW)
+   Pattern: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+   Context: X-Powered-By: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+
+115. Stack Trace Disclosure (HIGH)
+   Pattern: in 
+   Context: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html><!-- InstanceBegin template="/Templates/main_dynamic_template.dwt.php" codeOutsideHTMLIsLocked="false" -->
+<head>
+<meta http-equiv="Content-Type" content="text/html; cha
+
+116. Server Header Disclosure (LOW)
+   Pattern: nginx/1.19.0
+   Context: Server: nginx/1.19.0
+
+117. Technology Stack Disclosure (LOW)
+   Pattern: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+   Context: X-Powered-By: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+
+118. Stack Trace Disclosure (HIGH)
+   Pattern: in 
+   Context: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html><!-- InstanceBegin template="/Templates/main_dynamic_template.dwt.php" codeOutsideHTMLIsLocked="false" -->
+<head>
+<meta http-equiv="Content-Type" content="text/html; cha
+
+119. Server Header Disclosure (LOW)
+   Pattern: nginx/1.19.0
+   Context: Server: nginx/1.19.0
+
+120. Technology Stack Disclosure (LOW)
+   Pattern: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+   Context: X-Powered-By: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+
+121. Stack Trace Disclosure (HIGH)
+   Pattern: in 
+   Context: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html><!-- InstanceBegin template="/Templates/main_dynamic_template.dwt.php" codeOutsideHTMLIsLocked="false" -->
+<head>
+<meta http-equiv="Content-Type" content="text/html; cha
+
+122. Server Header Disclosure (LOW)
+   Pattern: nginx/1.19.0
+   Context: Server: nginx/1.19.0
+
+123. Technology Stack Disclosure (LOW)
+   Pattern: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+   Context: X-Powered-By: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+
+124. Stack Trace Disclosure (HIGH)
+   Pattern: in 
+   Context: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html><!-- InstanceBegin template="/Templates/main_dynamic_template.dwt.php" codeOutsideHTMLIsLocked="false" -->
+<head>
+<meta http-equiv="Content-Type" content="text/html; cha
+
+125. Server Header Disclosure (LOW)
+   Pattern: nginx/1.19.0
+   Context: Server: nginx/1.19.0
+
+126. Technology Stack Disclosure (LOW)
+   Pattern: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+   Context: X-Powered-By: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+
+127. Stack Trace Disclosure (HIGH)
+   Pattern: in 
+   Context: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html><!-- InstanceBegin template="/Templates/main_dynamic_template.dwt.php" codeOutsideHTMLIsLocked="false" -->
+<head>
+<meta http-equiv="Content-Type" content="text/html; cha
+
+128. Server Header Disclosure (LOW)
+   Pattern: nginx/1.19.0
+   Context: Server: nginx/1.19.0
+
+129. Technology Stack Disclosure (LOW)
+   Pattern: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+   Context: X-Powered-By: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+
+130. Stack Trace Disclosure (HIGH)
+   Pattern: in 
+   Context: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html><!-- InstanceBegin template="/Templates/main_dynamic_template.dwt.php" codeOutsideHTMLIsLocked="false" -->
+<head>
+<meta http-equiv="Content-Type" content="text/html; cha
+
+131. Server Header Disclosure (LOW)
+   Pattern: nginx/1.19.0
+   Context: Server: nginx/1.19.0
+
+132. Technology Stack Disclosure (LOW)
+   Pattern: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+   Context: X-Powered-By: PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1
+
+================================================================================
+RECOMMENDATIONS:
+================================================================================
+1. Implement custom error pages
+2. Disable debug mode in production
+3. Configure web server security
+4. Implement proper error logging
+5. Use Web Application Firewall
