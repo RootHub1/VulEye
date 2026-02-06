@@ -1,228 +1,181 @@
 import requests
 from bs4 import BeautifulSoup
-import re
+from urllib.parse import urlparse
 from colorama import init, Fore, Style
+import re
+import urllib3
 
+urllib3.disable_warnings()
 init(autoreset=True)
+
+
+def detect_technologies(response, soup):
+    text = response.text.lower()
+    headers = response.headers
+    tech = set()
+
+    server = headers.get("Server", "")
+    if server:
+        tech.add(("Server", server))
+        if "nginx" in server.lower():
+            tech.add(("Web Server", "nginx"))
+        elif "apache" in server.lower():
+            tech.add(("Web Server", "Apache"))
+        elif "iis" in server.lower():
+            tech.add(("Web Server", "Microsoft IIS"))
+        elif "lighttpd" in server.lower():
+            tech.add(("Web Server", "Lighttpd"))
+
+    powered = headers.get("X-Powered-By", "")
+    if powered:
+        tech.add(("X-Powered-By", powered))
+        if "php" in powered.lower():
+            tech.add(("Language", "PHP"))
+        elif "asp.net" in powered.lower():
+            tech.add(("Language", "ASP.NET"))
+        elif "python" in powered.lower():
+            tech.add(("Language", "Python"))
+        elif "node" in powered.lower():
+            tech.add(("Runtime", "Node.js"))
+
+    generator = soup.find("meta", attrs={"name": "generator"})
+    if generator and generator.get("content"):
+        tech.add(("Generator", generator["content"]))
+
+    if any(x in text for x in ["/wp-content/", "/wp-includes/", "wp-json"]):
+        tech.add(("CMS", "WordPress"))
+        m = re.search(r"wordpress\s*([\d.]+)", text)
+        if m:
+            tech.add(("WordPress Version", m.group(1)))
+
+    if any(x in text for x in ["/sites/default/", "drupal"]):
+        tech.add(("CMS", "Drupal"))
+
+    if any(x in text for x in ["/media/system/", "joomla"]):
+        tech.add(("CMS", "Joomla"))
+
+    if any(x in text for x in ["/skin/frontend/", "magento"]):
+        tech.add(("E-commerce", "Magento"))
+
+    if "prestashop" in text:
+        tech.add(("E-commerce", "PrestaShop"))
+
+    if "shopware" in text:
+        tech.add(("E-commerce", "Shopware"))
+
+    if "react" in text or "__react" in text:
+        tech.add(("Framework", "React"))
+
+    if "angular" in text or "ng-app" in text:
+        tech.add(("Framework", "Angular"))
+
+    if "vue" in text or "__vue" in text:
+        tech.add(("Framework", "Vue.js"))
+
+    if "jquery" in text:
+        tech.add(("Library", "jQuery"))
+        m = re.search(r"jquery[-./]([\d.]+)", text)
+        if m:
+            tech.add(("jQuery Version", m.group(1)))
+
+    if "bootstrap" in text:
+        tech.add(("Framework", "Bootstrap"))
+        m = re.search(r"bootstrap[-./]([\d.]+)", text)
+        if m:
+            tech.add(("Bootstrap Version", m.group(1)))
+
+    if "font-awesome" in text:
+        tech.add(("Library", "Font Awesome"))
+
+    if "cloudflare" in text or "cf-ray" in headers:
+        tech.add(("CDN", "Cloudflare"))
+
+    if "akamai" in text:
+        tech.add(("CDN", "Akamai"))
+
+    if "fastly" in text:
+        tech.add(("CDN", "Fastly"))
+
+    if any(x in text for x in ["amazonaws.com", "cloudfront"]):
+        tech.add(("Cloud", "AWS"))
+
+    if "firebase" in text:
+        tech.add(("Service", "Firebase"))
+
+    if "stripe" in text:
+        tech.add(("Payment", "Stripe"))
+
+    if "paypal" in text:
+        tech.add(("Payment", "PayPal"))
+
+    if "google-analytics" in text or "analytics.js" in text:
+        tech.add(("Analytics", "Google Analytics"))
+
+    if "recaptcha" in text:
+        tech.add(("Security", "reCAPTCHA"))
+
+    if ".php" in text and "php" not in powered.lower():
+        tech.add(("Language", "PHP"))
+
+    if any(x in text for x in [".asp", ".aspx"]):
+        tech.add(("Language", "ASP.NET"))
+
+    if any(x in text for x in [".jsp", "java"]):
+        tech.add(("Language", "Java/JSP"))
+
+    if "rails" in text or "ruby" in server.lower():
+        tech.add(("Language", "Ruby on Rails"))
+
+    if "django" in text or "flask" in text:
+        tech.add(("Language", "Python"))
+
+    if "express" in text or "node" in server.lower():
+        tech.add(("Runtime", "Node.js"))
+
+    return sorted(tech, key=lambda x: x[0])
 
 
 def run():
     print(f"\n{Fore.CYAN}{'=' * 70}")
-    print(f"{Fore.CYAN}║{Fore.GREEN}              TECHNOLOGY STACK DETECTOR                             {Fore.CYAN}║")
+    print(f"{Fore.CYAN}║{Fore.GREEN}            TECHNOLOGY STACK DETECTOR                            {Fore.CYAN}║")
     print(f"{Fore.CYAN}{'=' * 70}{Style.RESET_ALL}")
 
-    target = input(f"\n{Fore.YELLOW}Enter target URL (http:// or https://): {Style.RESET_ALL}").strip()
-
-    if not target:
-        print(f"\n{Fore.RED}[!] Empty input. Aborting.{Style.RESET_ALL}")
-        input(f"\n{Fore.BLUE}Press Enter to return to menu...{Style.RESET_ALL}")
+    target = input(f"\n{Fore.YELLOW}Target URL: {Style.RESET_ALL}").strip()
+    if not target or not target.startswith(("http://", "https://")):
         return
-
-    if not target.startswith(('http://', 'https://')):
-        print(f"\n{Fore.RED}[!] URL must start with http:// or https://{Style.RESET_ALL}")
-        input(f"\n{Fore.BLUE}Press Enter to return to menu...{Style.RESET_ALL}")
-        return
-
-    print(f"\n{Fore.CYAN}[+] Detecting technologies for: {target}{Style.RESET_ALL}")
 
     try:
         response = requests.get(target, timeout=10, verify=False)
-        soup = BeautifulSoup(response.text, 'html.parser')
-        headers = response.headers
+        soup = BeautifulSoup(response.text, "html.parser")
 
-        print(f"\n{Fore.GREEN}[✓] Connection successful (Status: {response.status_code}){Style.RESET_ALL}")
+        print(f"\n{Fore.GREEN}[✓] Connected ({response.status_code}){Style.RESET_ALL}")
+
+        techs = detect_technologies(response, soup)
+
         print(f"\n{Fore.CYAN}{'=' * 70}")
-        print(f"{Fore.CYAN}TECHNOLOGY DETECTION RESULTS")
+        print(f"{Fore.CYAN}DETECTED TECHNOLOGIES")
         print(f"{Fore.CYAN}{'=' * 70}{Style.RESET_ALL}")
 
-        technologies = []
-
-        server = headers.get('Server', '')
-        if server:
-            technologies.append(('Server', server))
-            if 'apache' in server.lower():
-                technologies.append(('Web Server', 'Apache'))
-            elif 'nginx' in server.lower():
-                technologies.append(('Web Server', 'nginx'))
-            elif 'iis' in server.lower():
-                technologies.append(('Web Server', 'Microsoft IIS'))
-            elif 'lighttpd' in server.lower():
-                technologies.append(('Web Server', 'Lighttpd'))
-
-        x_powered_by = headers.get('X-Powered-By', '')
-        if x_powered_by:
-            technologies.append(('X-Powered-By', x_powered_by))
-            if 'php' in x_powered_by.lower():
-                technologies.append(('Language', 'PHP'))
-            elif 'asp.net' in x_powered_by.lower():
-                technologies.append(('Language', 'ASP.NET'))
-            elif 'python' in x_powered_by.lower():
-                technologies.append(('Language', 'Python'))
-            elif 'node.js' in x_powered_by.lower():
-                technologies.append(('Runtime', 'Node.js'))
-
-        if '/wp-content/' in response.text or '/wp-includes/' in response.text:
-            technologies.append(('CMS', 'WordPress'))
-            wp_version = re.search(r'<meta name="generator" content="WordPress ([\d.]+)', response.text)
-            if wp_version:
-                technologies.append(('WordPress Version', wp_version.group(1)))
-
-        if '/sites/default/' in response.text or 'drupal' in response.text.lower():
-            technologies.append(('CMS', 'Drupal'))
-            drupal_version = re.search(r'<meta name="generator" content="Drupal ([\d.]+)', response.text)
-            if drupal_version:
-                technologies.append(('Drupal Version', drupal_version.group(1)))
-
-        if '/media/system/' in response.text or 'joomla' in response.text.lower():
-            technologies.append(('CMS', 'Joomla'))
-
-        if '/skin/frontend/' in response.text or 'magento' in response.text.lower():
-            technologies.append(('E-commerce', 'Magento'))
-
-        if '/static/shopware/' in response.text or 'shopware' in response.text.lower():
-            technologies.append(('E-commerce', 'Shopware'))
-
-        if '/prestashop/' in response.text or 'prestashop' in response.text.lower():
-            technologies.append(('E-commerce', 'PrestaShop'))
-
-        if 'wp-json' in response.text or 'rest_route' in response.text:
-            technologies.append(('API', 'WordPress REST API'))
-
-        if 'react' in response.text.lower() or '__react' in response.text:
-            technologies.append(('Framework', 'React'))
-
-        if 'angular' in response.text.lower() or 'ng-app' in response.text or 'ng-controller' in response.text:
-            technologies.append(('Framework', 'Angular'))
-
-        if 'vue' in response.text.lower() or '__vue' in response.text:
-            technologies.append(('Framework', 'Vue.js'))
-
-        if 'jquery' in response.text.lower():
-            technologies.append(('Library', 'jQuery'))
-            jquery_version = re.search(r'jquery/([\d.]+)', response.text, re.IGNORECASE)
-            if jquery_version:
-                technologies.append(('jQuery Version', jquery_version.group(1)))
-
-        if 'bootstrap' in response.text.lower():
-            technologies.append(('Framework', 'Bootstrap'))
-            bootstrap_version = re.search(r'bootstrap/([\d.]+)', response.text, re.IGNORECASE)
-            if bootstrap_version:
-                technologies.append(('Bootstrap Version', bootstrap_version.group(1)))
-
-        if 'font-awesome' in response.text.lower():
-            technologies.append(('Library', 'Font Awesome'))
-
-        if 'googleapis.com' in response.text:
-            technologies.append(('CDN', 'Google APIs'))
-
-        if 'cloudflare' in response.text.lower() or 'cf-ray' in headers:
-            technologies.append(('CDN', 'Cloudflare'))
-
-        if 'akamai' in response.text.lower():
-            technologies.append(('CDN', 'Akamai'))
-
-        if 'fastly' in response.text.lower():
-            technologies.append(('CDN', 'Fastly'))
-
-        if 'amazonaws.com' in response.text or 'cloudfront' in response.text.lower():
-            technologies.append(('Cloud', 'AWS'))
-
-        if 'firebase' in response.text.lower():
-            technologies.append(('Service', 'Firebase'))
-
-        if 'stripe' in response.text.lower():
-            technologies.append(('Payment', 'Stripe'))
-
-        if 'paypal' in response.text.lower():
-            technologies.append(('Payment', 'PayPal'))
-
-        if 'google-analytics' in response.text.lower() or 'analytics.js' in response.text:
-            technologies.append(('Analytics', 'Google Analytics'))
-
-        if 'recaptcha' in response.text.lower():
-            technologies.append(('Security', 'reCAPTCHA'))
-
-        if 'cloudinary' in response.text.lower():
-            technologies.append(('Service', 'Cloudinary (Image CDN)'))
-
-        meta_generator = soup.find('meta', attrs={'name': 'generator'})
-        if meta_generator and meta_generator.get('content'):
-            technologies.append(('Generator', meta_generator['content']))
-
-        links = soup.find_all('link')
-        for link in links:
-            href = link.get('href', '')
-            if 'bootstrap' in href.lower():
-                technologies.append(('Framework', 'Bootstrap (via CSS)'))
-            elif 'font-awesome' in href.lower():
-                technologies.append(('Library', 'Font Awesome (via CSS)'))
-
-        scripts = soup.find_all('script')
-        for script in scripts:
-            src = script.get('src', '')
-            if 'react' in src.lower():
-                technologies.append(('Framework', 'React (via script)'))
-            elif 'angular' in src.lower():
-                technologies.append(('Framework', 'Angular (via script)'))
-            elif 'vue' in src.lower():
-                technologies.append(('Framework', 'Vue.js (via script)'))
-            elif 'jquery' in src.lower():
-                technologies.append(('Library', 'jQuery (via script)'))
-
-        if 'php' in response.text.lower() and 'X-Powered-By' not in headers:
-            technologies.append(('Language', 'PHP (detected in content)'))
-
-        if '.asp' in response.text or '.aspx' in response.text:
-            technologies.append(('Language', 'ASP.NET (detected in URLs)'))
-
-        if '.jsp' in response.text or 'java' in server.lower():
-            technologies.append(('Language', 'Java/JSP'))
-
-        if 'ruby' in server.lower() or 'rails' in response.text.lower():
-            technologies.append(('Language', 'Ruby on Rails'))
-
-        if 'python' in server.lower() or 'django' in response.text.lower():
-            technologies.append(('Language', 'Python/Django'))
-
-        if 'express' in server.lower() or 'node' in server.lower():
-            technologies.append(('Runtime', 'Node.js/Express'))
-
-        technologies = list(set(technologies))
-        technologies.sort(key=lambda x: x[0])
-
-        if technologies:
-            print(f"\n{Fore.GREEN}[✓] Detected Technologies:{Style.RESET_ALL}")
-            for tech, value in technologies:
-                print(f"   {Fore.CYAN}• {tech}:{Style.RESET_ALL} {value}")
+        if techs:
+            for name, value in techs:
+                print(f"{Fore.CYAN}• {name}:{Style.RESET_ALL} {value}")
         else:
-            print(f"\n{Fore.YELLOW}[!] No specific technologies detected{Style.RESET_ALL}")
+            print(f"{Fore.YELLOW}No technologies detected{Style.RESET_ALL}")
 
         print(f"\n{Fore.CYAN}{'=' * 70}")
-        print(f"{Fore.CYAN}ADDITIONAL INFORMATION")
+        print(f"{Fore.CYAN}PAGE INFO")
         print(f"{Fore.CYAN}{'=' * 70}{Style.RESET_ALL}")
 
-        print(f"\n{Fore.GREEN}HTTP Headers Analysis:{Style.RESET_ALL}")
-        print(f"   Status Code: {response.status_code}")
-        print(f"   Content-Type: {headers.get('Content-Type', 'Not specified')}")
-        print(f"   Server: {headers.get('Server', 'Not disclosed')}")
+        print(f"Server: {response.headers.get('Server', 'Hidden')}")
+        print(f"Content-Type: {response.headers.get('Content-Type', 'Unknown')}")
+        print(f"Page Size: {len(response.content)} bytes")
+        print(f"Connection: {urlparse(target).scheme.upper()}")
 
-        content_length = len(response.content)
-        print(f"   Page Size: {content_length} bytes ({content_length / 1024:.2f} KB)")
+        print(f"\n{Fore.GREEN}[✓] Detection completed{Style.RESET_ALL}")
 
-        if 'https' in target:
-            print(f"{Fore.GREEN}   Connection: HTTPS (Secure){Style.RESET_ALL}")
-        else:
-            print(f"{Fore.YELLOW}   Connection: HTTP (Not encrypted){Style.RESET_ALL}")
+    except requests.RequestException as e:
+        print(f"{Fore.RED}Error: {str(e)}{Style.RESET_ALL}")
 
-        print(f"\n{Fore.CYAN}{'=' * 70}")
-        print(f"{Fore.GREEN}[✓] Technology detection completed{Style.RESET_ALL}")
-        print(f"{Fore.CYAN}{'=' * 70}{Style.RESET_ALL}")
 
-    except requests.exceptions.Timeout:
-        print(f"\n{Fore.RED}[!] Request timeout. Target may be unreachable.{Style.RESET_ALL}")
-    except requests.exceptions.ConnectionError:
-        print(f"\n{Fore.RED}[!] Connection error. Check if target is accessible.{Style.RESET_ALL}")
-    except Exception as e:
-        print(f"\n{Fore.RED}[!] Error: {str(e)}{Style.RESET_ALL}")
-
-    input(f"\n{Fore.BLUE}Press Enter to return to menu...{Style.RESET_ALL}")
+if __name__ == "__main__":
+    run()
