@@ -890,6 +890,7 @@ def run():
                 'Server-Timing'
             ]
 
+
             disclosed_headers = 0
             for header in headers_to_check:
                 value = response.headers.get(header)
