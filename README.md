@@ -32,10 +32,28 @@
 ## Installation
 
 
+
+
+# Project Name
+
+Brief description of your project here.
+
+## Installation
+
 ```
 BASH
+```
+1. Clone the repository:
+```
 git clone https://github.com/Kyni-lover2004/VulEye
 cd VulEye
+```
+3. Install the required Python packages:
+```
+pip install -r requirements.txt
+```
+4. Usage
+```
 chmod +x main.py
 python3 main.py
 ```
