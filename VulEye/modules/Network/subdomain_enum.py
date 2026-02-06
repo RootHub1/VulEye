@@ -1,125 +1,199 @@
 import socket
 import requests
 import threading
+import random
+import string
+import time
+import re
 from queue import Queue
-from colorama import init, Fore, Style
+from colorama import Fore, Style, init
+from datetime import datetime
 
 init(autoreset=True)
 
+THREADS = 25
+TIMEOUT = 4
+DELAY = 0.2
+
+TAKEOVER_SIGNS = [
+    "github.io", "herokuapp.com", "amazonaws.com",
+    "cloudfront.net", "azurewebsites.net",
+    "netlify.app", "fastly.net"
+]
+
+SUBDOMAINS = [
+    "www","mail","ftp","admin","api","dev","test","staging",
+    "beta","portal","vpn","secure","login","auth","sso",
+    "cdn","static","img","media","blog","shop","support",
+    "docs","wiki","status","dashboard","cpanel","webmail"
+]
+
+results = {
+    "domain": None,
+    "time": None,
+    "wildcard": False,
+    "subdomains": [],
+    "issues": [],
+    "attack_surface": []
+}
+
+
+def banner(title):
+    print(f"\n{Fore.CYAN}{'='*70}")
+    print(f"{Fore.CYAN}{title.center(70)}")
+    print(f"{Fore.CYAN}{'='*70}{Style.RESET_ALL}")
+
+def random_sub(domain):
+    r = ''.join(random.choices(string.ascii_lowercase, k=12))
+    return f"{r}.{domain}"
+
+def wildcard_check(domain):
+    try:
+        socket.gethostbyname(random_sub(domain))
+        return True
+    except:
+        return False
+
+def reverse_dns(ip):
+    try:
+        return socket.gethostbyaddr(ip)[0]
+    except:
+        return None
+
+def http_probe(host):
+    for scheme in ["https", "http"]:
+        try:
+            r = requests.get(
+                f"{scheme}://{host}",
+                timeout=TIMEOUT,
+                allow_redirects=True,
+                verify=False
+            )
+            title = None
+            if r.text:
+                m = re.search(r"<title>(.*?)</title>", r.text, re.I)
+                if m:
+                    title = m.group(1)[:60]
+            return scheme.upper(), r.status_code, title
+        except:
+            pass
+    return None, None, None
+
+
+def worker(domain, q, lock):
+    while not q.empty():
+        sub = q.get()
+        host = f"{sub}.{domain}"
+        try:
+            ip = socket.gethostbyname(host)
+
+            cname = None
+            try:
+                cname = socket.gethostbyname_ex(host)[0]
+            except:
+                pass
+
+            proto, status, title = http_probe(host)
+            rev = reverse_dns(ip)
+
+            risk = "LOW"
+            if any(k in sub for k in ["admin", "dev", "test", "stage", "dashboard"]):
+                risk = "MEDIUM"
+
+            takeover = False
+            if cname:
+                for sig in TAKEOVER_SIGNS:
+                    if sig in cname:
+                        takeover = True
+                        risk = "HIGH"
+                        results["issues"].append(
+                            f"Possible subdomain takeover: {host} → {cname}"
+                        )
+
+            with lock:
+                results["subdomains"].append({
+                    "host": host,
+                    "ip": ip,
+                    "protocol": proto,
+                    "status": status,
+                    "title": title,
+                    "reverse_dns": rev,
+                    "risk": risk,
+                    "takeover": takeover
+                })
+
+                color = Fore.RED if risk == "HIGH" else (
+                        Fore.YELLOW if risk == "MEDIUM" else Fore.GREEN)
+
+                print(f"{color}[✓] {host} → {ip}{Style.RESET_ALL}")
+                if proto:
+                    print(f"    {proto} {status} | {title or 'No title'}")
+                if takeover:
+                    print(f"    {Fore.RED}[!] TAKEOVER POSSIBLE{Style.RESET_ALL}")
+
+        except:
+            pass
+        finally:
+            q.task_done()
+            time.sleep(DELAY)
+
 
 def run():
-    print(f"\n{Fore.CYAN}{'=' * 70}")
-    print(f"{Fore.CYAN}║{Fore.GREEN}              SUBDOMAIN ENUMERATOR                                  {Fore.CYAN}║")
-    print(f"{Fore.CYAN}{'=' * 70}{Style.RESET_ALL}")
+    banner("SUBDOMAIN ENUMERATION — PRO")
 
-    domain = input(f"\n{Fore.YELLOW}Enter target domain (e.g., example.com): {Style.RESET_ALL}").strip()
-
+    domain = input(f"{Fore.YELLOW}Target domain: {Style.RESET_ALL}").strip()
     if not domain:
-        print(f"\n{Fore.RED}[!] Empty input. Aborting.{Style.RESET_ALL}")
-        input(f"\n{Fore.BLUE}Press Enter to return to menu...{Style.RESET_ALL}")
         return
 
-    if domain.startswith(('http://', 'https://')):
-        domain = domain.split('://')[1].split('/')[0]
+    results["domain"] = domain
+    results["time"] = str(datetime.utcnow())
 
-    print(f"\n{Fore.CYAN}[+] Starting subdomain enumeration for: {domain}{Style.RESET_ALL}")
-    print(f"{Fore.YELLOW}[i] Using built-in wordlist (common subdomains){Style.RESET_ALL}")
+    banner("WILDCARD CHECK")
+    results["wildcard"] = wildcard_check(domain)
+    if results["wildcard"]:
+        print(f"{Fore.YELLOW}[!] Wildcard DNS detected (filtering enabled){Style.RESET_ALL}")
+    else:
+        print(f"{Fore.GREEN}[✓] No wildcard DNS detected{Style.RESET_ALL}")
 
-    subdomains = [
-        'www', 'mail', 'ftp', 'localhost', 'webmail', 'smtp', 'pop', 'imap',
-        'ns1', 'ns2', 'test', 'dev', 'staging', 'admin', 'secure', 'vpn',
-        'shop', 'api', 'blog', 'forum', 'support', 'portal', 'app', 'beta',
-        'cdn', 'static', 'img', 'images', 'media', 'm', 'mobile', 'docs',
-        'help', 'wiki', 'status', 'server', 'db', 'sql', 'direct', 'cpanel',
-        'webdisk', 'autodiscover', 'autoconfig', 'login', 'auth', 'sso'
-    ]
-
-    found = []
-    lock = threading.Lock()
     q = Queue()
+    lock = threading.Lock()
 
-    for sub in subdomains:
-        q.put(sub)
+    for s in SUBDOMAINS:
+        q.put(s)
 
-    def check_subdomain():
-        while not q.empty():
-            sub = q.get()
-            target = f"{sub}.{domain}"
-
-            try:
-                ip = socket.gethostbyname(target)
-                try:
-                    url = f"http://{target}"
-                    resp = requests.get(url, timeout=3, verify=False, allow_redirects=True)
-                    status = resp.status_code
-                    title = "N/A"
-                    if resp.status_code == 200:
-                        title_match = __import__('re').search(r'<title>(.*?)</title>', resp.text,
-                                                              __import__('re').IGNORECASE)
-                        if title_match:
-                            title = title_match.group(1)[:50]
-
-                    with lock:
-                        found.append((sub, ip, status, title))
-                        print(f"{Fore.GREEN}[✓] FOUND: {target} → {ip} (HTTP {status}){Style.RESET_ALL}")
-                        if title != "N/A":
-                            print(f"    Title: {title}")
-                except:
-                    with lock:
-                        found.append((sub, ip, "N/A", "N/A"))
-                        print(f"{Fore.YELLOW}[i] DNS only: {target} → {ip}{Style.RESET_ALL}")
-            except socket.gaierror:
-                pass
-            except Exception:
-                pass
-            finally:
-                q.task_done()
-
-    print(f"\n{Fore.CYAN}{'=' * 70}")
-    print(f"{Fore.CYAN}ENUMERATION IN PROGRESS (checking {len(subdomains)} subdomains){Style.RESET_ALL}")
-    print(f"{Fore.CYAN}{'=' * 70}{Style.RESET_ALL}")
-
-    threads = []
-    for _ in range(20):
-        t = threading.Thread(target=check_subdomain, daemon=True)
-        t.start()
-        threads.append(t)
+    banner(f"ENUMERATION ({len(SUBDOMAINS)} SUBDOMAINS)")
+    for _ in range(THREADS):
+        threading.Thread(target=worker, args=(domain, q, lock), daemon=True).start()
 
     q.join()
 
-    print(f"\n{Fore.CYAN}{'=' * 70}")
-    print(f"{Fore.CYAN}RESULTS SUMMARY")
-    print(f"{Fore.CYAN}{'=' * 70}{Style.RESET_ALL}")
+    
+    banner("SUMMARY")
 
-    if found:
-        print(f"\n{Fore.GREEN}[✓] Found {len(found)} active subdomain(s):{Style.RESET_ALL}")
-        for sub, ip, status, title in sorted(found):
-            print(f"   {Fore.CYAN}• {sub}.{domain}{Style.RESET_ALL}")
-            print(f"     IP: {ip} | HTTP: {status}")
-            if title != "N/A":
-                print(f"     Title: {title}")
+    highs = [s for s in results["subdomains"] if s["risk"] == "HIGH"]
+    meds = [s for s in results["subdomains"] if s["risk"] == "MEDIUM"]
 
-        print(f"\n{Fore.YELLOW}Recommendations:{Style.RESET_ALL}")
-        print(f"   • Verify ownership of all discovered subdomains")
-        print(f"   • Check for exposed services (admin panels, APIs)")
-        print(f"   • Scan discovered subdomains with other VulEye modules")
-        print(f"   • Monitor for unauthorized subdomain creation")
-        print(f"   • Implement DNS monitoring and alerts")
-    else:
-        print(f"\n{Fore.YELLOW}[!] No active subdomains discovered{Style.RESET_ALL}")
-        print(f"\n{Fore.CYAN}Note:{Style.RESET_ALL}")
-        print(f"   • This scan used a limited built-in wordlist")
-        print(f"   • For comprehensive results:")
-        print(f"        - Use larger wordlists (e.g., seclists/Discovery/DNS)")
-        print(f"        - Integrate with certificate transparency logs")
-        print(f"        - Use dedicated tools: amass, sublist3r, assetfinder")
+    print(f"{Fore.GREEN}Found: {len(results['subdomains'])} subdomains{Style.RESET_ALL}")
+    print(f"{Fore.RED}High risk: {len(highs)}{Style.RESET_ALL}")
+    print(f"{Fore.YELLOW}Medium risk: {len(meds)}{Style.RESET_ALL}")
 
-    print(f"\n{Fore.CYAN}{'=' * 70}")
+    if highs:
+        results["attack_surface"].append(
+            "High-risk subdomains → auth bypass / takeover / admin access"
+        )
+
+    if any(s["protocol"] for s in results["subdomains"]):
+        results["attack_surface"].append(
+            "Web services → XSS / IDOR / auth testing"
+        )
+
+    banner("WHERE TO ATTACK NEXT")
+    for a in results["attack_surface"]:
+        print(f"• {a}")
+
+    banner("DONE")
     print(f"{Fore.GREEN}[✓] Subdomain enumeration completed{Style.RESET_ALL}")
-    print(f"{Fore.CYAN}{'=' * 70}{Style.RESET_ALL}")
+    print(f"{Fore.YELLOW}Use only with authorization{Style.RESET_ALL}")
 
-    print(f"\n{Fore.YELLOW}⚠️  LEGAL REMINDER:{Style.RESET_ALL}")
-    print(f"   All discovered assets must be authorized for testing.")
-    print(f"   Unauthorized scanning of discovered subdomains = illegal activity.")
-
-    input(f"\n{Fore.BLUE}Press Enter to return to menu...{Style.RESET_ALL}")
+if __name__ == "__main__":
+    run()
