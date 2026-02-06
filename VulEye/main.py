@@ -192,7 +192,7 @@ def show_payloads_menu():
     if payloads:
         print(f"\n[+] Found {len(payloads)} exploits:")
         print("-" * 70)
-        for i, payload in enumerate(payloads[:10], 1):  # Показываем первые 10
+        for i, payload in enumerate(payloads[:10], 1):
             print(f" {i}. {payload}")
         if len(payloads) > 10:
             print(f" ... and {len(payloads) - 10} more")
@@ -385,3 +385,5 @@ if __name__ == "__main__":
 
         traceback.print_exc()
         sys.exit(1)
+
+        
