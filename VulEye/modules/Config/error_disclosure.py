@@ -4,27 +4,98 @@ import re
 from colorama import init, Fore, Style
 import time
 import json
+import sys
 
 init(autoreset=True)
 
 
-def test_error_trigger(url, payload, method='GET', json_data=None):
-    """Универсальная функция для тестирования ошибок"""
+def is_safe_to_test(target):
+    """Этическая проверка перед запуском"""
+    print(f"\n{Fore.RED}{'=' * 80}")
+    print(f"⚠️  CRITICAL SAFETY & ETHICAL CHECK")
+    print(f"{'=' * 80}{Style.RESET_ALL}")
+    print(f"\n{Fore.YELLOW}This scanner will send ~35 requests to the target.{Style.RESET_ALL}")
+    print(f"\n{Fore.CYAN}ETHICAL TESTING RULES:{Style.RESET_ALL}")
+    print(f"   ✅ ONLY test sites where you have WRITTEN authorization")
+    print(f"   ✅ ONLY test within the defined scope of bug bounty program")
+    print(f"   ✅ Respect rate limits (2+ seconds between requests)")
+    print(f"   ✅ STOP immediately if you see 5xx errors (server overload)")
+    print(f"   ✅ Report findings responsibly through official channels")
+    print(f"\n{Fore.RED}ILLEGAL ACTIVITIES (STRICTLY PROHIBITED):{Style.RESET_ALL}")
+    print(f"   ❌ Testing without explicit authorization")
+    print(f"   ❌ Testing production systems without permission")
+    print(f"   ❌ Causing service disruption (DoS)")
+    print(f"   ❌ Accessing unauthorized data")
+    print(f"   ❌ Testing outside program scope")
+    
+    print(f"\n{Fore.YELLOW}⚠️  WARNING: Unauthorized testing may result in:{Style.RESET_ALL}")
+    print(f"   • Permanent ban from bug bounty platforms")
+    print(f"   • Legal action and prosecution")
+    print(f"   • Financial penalties")
+    print(f"   • Criminal charges in some jurisdictions")
+    
+    confirm = input(f"\n{Fore.YELLOW}Do you have EXPLICIT WRITTEN AUTHORIZATION to test this target? (yes/no): {Style.RESET_ALL}").strip().lower()
+    
+    if confirm != 'yes':
+        print(f"\n{Fore.RED}[!] ABORTING: Ethical testing requires explicit authorization.{Style.RESET_ALL}")
+        print(f"{Fore.YELLOW}Get written permission first, then run this tool again.{Style.RESET_ALL}")
+        return False
+    
+    # Проверка на известные крупные платформы
+    major_platforms = ['google.com', 'microsoft.com', 'apple.com', 'facebook.com', 
+                       'twitter.com', 'amazon.com', 'github.com', 'gitlab.com']
+    if any(platform in target.lower() for platform in major_platforms):
+        print(f"\n{Fore.YELLOW}⚠️  You're testing a major platform.{Style.RESET_ALL}")
+        print(f"{Fore.CYAN}Have you enrolled in their official bug bounty program?{Style.RESET_ALL}")
+        enrolled = input(f"{Fore.YELLOW}(yes/no): {Style.RESET_ALL}").strip().lower()
+        if enrolled != 'yes':
+            print(f"\n{Fore.RED}[!] ABORTING: Testing major platforms without enrollment is prohibited.{Style.RESET_ALL}")
+            print(f"{Fore.YELLOW}Enroll in their program first: https://hackerone.com, https://bugcrowd.com{Style.RESET_ALL}")
+            return False
+    
+    # Финальное подтверждение
+    final_confirm = input(f"\n{Fore.RED}Type 'I ACCEPT RESPONSIBILITY' to continue: {Style.RESET_ALL}").strip()
+    if final_confirm != 'I ACCEPT RESPONSIBILITY':
+        print(f"\n{Fore.RED}[!] ABORTING: Safety first.{Style.RESET_ALL}")
+        return False
+    
+    return True
+
+
+def test_error_trigger(url, payload, method='GET', json_data=None, session=None):
+    """Безопасная функция тестирования с защитой от перегрузки"""
     try:
+        if session is None:
+            session = requests.Session()
+        
         if method == 'GET':
             if '?' in url:
                 test_url = f"{url}&{payload}"
             else:
                 test_url = f"{url}?{payload}"
             
-            response = requests.get(test_url, timeout=10, verify=False)
+            # Проверка здоровья сервера перед запросом
+            try:
+                health_resp = session.get(url, timeout=5, verify=False)
+                if health_resp.status_code >= 500:
+                    print(f"\n{Fore.RED}[!] SERVER RETURNING 5xx ERRORS. STOPPING TO PREVENT DoS.{Style.RESET_ALL}")
+                    return "OVERLOAD", None, None
+            except:
+                pass
+            
+            response = session.get(test_url, timeout=10, verify=False)
         elif method == 'POST':
             if json_data:
-                response = requests.post(url, json=json_data, timeout=10, verify=False)
+                response = session.post(url, json=json_data, timeout=10, verify=False)
             else:
-                response = requests.post(url, data=payload, timeout=10, verify=False)
+                response = session.post(url, data=payload, timeout=10, verify=False)
         else:
-            response = requests.request(method, url, timeout=10, verify=False)
+            response = session.request(method, url, timeout=10, verify=False)
+        
+        # Критическая защита: остановка при 5xx ошибках
+        if response.status_code >= 500:
+            print(f"\n{Fore.RED}[!] SERVER ERROR {response.status_code} DETECTED. STOPPING SCAN.{Style.RESET_ALL}")
+            return "OVERLOAD", None, None
         
         return response.status_code, response.text, response.headers
     
@@ -37,7 +108,7 @@ def test_error_trigger(url, payload, method='GET', json_data=None):
 
 
 def analyze_response(content, headers):
-    """Улучшенный анализ ответов с расширенными паттернами"""
+    """Анализ ответов с расширенными паттернами"""
     findings = []
     severity = 'NONE'
 
@@ -49,113 +120,33 @@ def analyze_response(content, headers):
     error_patterns = {
         "cloud_secrets": {
             "patterns": [
-                "sk_live_",
-                "sk_test_",
-                "pk_live_",
-                "rk_live_",
-                "ghp_",
-                "gho_",
-                "gph_",
-                "glpat-",
-                "aws_access_key_id",
-                "aws_secret_access_key",
-                "x-api-key:",
-                "authorization: bearer",
-                "firebaseio.com",
-                "supabase.co/rest/v1",
-                "sendgrid.net",
-                "twilio.com",
-                "plivo.com",
-                "mailgun.org",
-                "cloudinary.com",
-                "algolia.net",
-                "pusher.com",
-                "intercom.io",
-                "segment.io",
-                "mixpanel",
-                "amplitude",
-                "braintree",
-                "squareup",
-                "paypal.com",
-                "stripe.com",
-                "recurly",
-                "chargify",
-                "auth0.com",
-                "okta.com",
-                "onelogin",
-                "mongodb+srv://",
-                "redis://",
-                "amqp://",
-                "s3.amazonaws.com",
-                "blob.core.windows.net",
-                "storage.googleapis.com",
-                "ssh-rsa aaa",
-                "-----begin",
-                "private key",
-                "begin rsa",
-                "begin dsa",
-                "begin ecdsa",
-                "git@github.com:",
-                "heroku.com",
-                "vercel.com",
-                "netlify.com",
-                "railway.app",
-                "render.com",
-                "fly.io",
-                "neon.tech",
-                "planetscale.com",
-                "cockroachlabs.cloud",
-                "mongodb.net",
-                "documentdb",
-                "dynamodb",
-                "rds.amazonaws",
-                "elasticache",
-                "redislabs",
-
-                "cloudflare",
-                "akamai",
-                "fastly",
-                "cloudfront"
+                "sk_live_", "sk_test_", "pk_live_", "rk_live_",
+                "ghp_", "gho_", "gph_", "glpat-",
+                "aws_access_key_id", "aws_secret_access_key",
+                "x-api-key:", "authorization: bearer",
+                "firebaseio.com", "supabase.co",
+                "sendgrid.net", "twilio.com", "mailgun.org",
+                "cloudinary.com", "algolia.net", "pusher.com",
+                "redis://", "amqp://", "s3.amazonaws.com",
+                "ssh-rsa aaa", "-----begin", "private key",
+                "begin rsa", "begin dsa", "begin ecdsa",
+                "mongodb+srv://"
             ],
             "severity": "CRITICAL",
             "type": "Cloud Service Secret Disclosure"
         },
 
-
         "sensitive_data": {
             "patterns": [
-                "db_password",
-                "database_password",
-                "api_key",
-                "secret_key",
-                "private_key",
-                "password_hash",
-                "password_reset_token",
-                "session_token",
-                "csrf_token",
-                "xsrf_token",
-                "access_token",
-                "refresh_token",
-                "oauth_token",
-                "jwt_token",
-                "bearer_token",
-                "mongodb://",
-                "postgres://",
-                "mysql:host=",
-                "postgresql://",
-                "redis://",
-                "memcached://",
-                "elasticsearch://",
-                "rabbitmq://",
-                "amqp://",
-                "smtp_password",
-                "email_password",
-                "admin_password",
-                "root_password",
-                "master_key",
-                "encryption_key",
-                "decryption_key",
-                "certificate"
+                "db_password", "database_password", "api_key",
+                "secret_key", "private_key", "password_hash",
+                "password_reset_token", "session_token",
+                "csrf_token", "xsrf_token", "access_token",
+                "refresh_token", "oauth_token", "jwt_token",
+                "bearer_token", "mongodb://", "postgres://",
+                "mysql:host=", "postgresql://", "smtp_password",
+                "admin_password", "root_password", "master_key",
+                "encryption_key", "certificate"
             ],
             "severity": "CRITICAL",
             "type": "Sensitive Data Disclosure"
@@ -163,50 +154,13 @@ def analyze_response(content, headers):
 
         "stack_trace": {
             "patterns": [
-                "traceback (most recent call last)",
-                "stack trace:",
-                "fatal error:",
-                "uncaught exception",
-                "exception in thread",
-                "at line",
-                "called from",
-                "file \"",
-                "line ",
-                "in ",
-                "throw new ",
-                "at com.",
-                "at org.",
-                "at java.",
-                "at javax.",
-                "at sun.",
-                "at io.",
-                "at net.",
-                "at org.springframework",
-                "at django.",
-                "at flask.",
-                "at express.",
-                "at koa.",
-                "at fastify.",
-                "at hapi.",
-                "at rails.",
-                "at active_record.",
-                "at laravel.",
-                "at illuminate.",
-                "at symfony.",
-                "at zend.",
-                "at cakephp.",
-                "at codeigniter.",
-                "at yii.",
-                "at django.db",
-                "at sqlalchemy.",
-                "at hibernate.",
-                "at mybatis.",
-                "at entityframework.",
-                "at sequelize.",
-                "at mongoose.",
-                "at prisma.",
-                "at typeorm.",
-                "at knex."
+                "traceback (most recent call last)", "stack trace:",
+                "fatal error:", "uncaught exception",
+                "exception in thread", "at line", "called from",
+                "file \"", "line ", "in ", "throw new ",
+                "at laravel.", "at illuminate.", "at symfony.",
+                "at django.db", "at sqlalchemy.", "at hibernate.",
+                "at sequelize.", "at mongoose.", "at prisma."
             ],
             "severity": "HIGH",
             "type": "Stack Trace Disclosure"
@@ -214,53 +168,11 @@ def analyze_response(content, headers):
 
         "file_path": {
             "patterns": [
-                "/var/www/",
-                "/home/",
-                "/usr/local/",
-                "/etc/",
-                "/opt/",
-                "/root/",
-                "/tmp/",
-                "c:\\\\",
-                "c:/",
-                "program files",
-                "windows\\system32",
-                ".php on line",
-                ".py\", line",
-                ".java\", line",
-                ".js\", line",
-                ".cs\", line",
-                ".rb\", line",
-                ".go\", line",
-                ".rs\", line",
-                ".cpp\", line",
-                ".h\", line",
-                ".hpp\", line",
-                ".c\", line",
-                ".cc\", line",
-                ".cxx\", line",
-                ".java\", line",
-                ".class\", line",
-                ".jar\", line",
-                ".war\", line",
-                ".ear\", line",
-                ".zip\", line",
-                ".tar\", line",
-                ".gz\", line",
-                ".bz2\", line",
-                ".xz\", line",
-                ".7z\", line",
-                ".rar\", line",
-                ".iso\", line",
-                ".dmg\", line",
-                ".exe\", line",
-                ".dll\", line",
-                ".so\", line",
-                ".dylib\", line",
-                ".a\", line",
-                ".lib\", line",
-                ".o\", line",
-                ".obj\", line"
+                "/var/www/", "/home/", "/usr/local/", "/etc/",
+                "/opt/", "/root/", "/tmp/", "c:\\\\", "c:/",
+                "program files", "windows\\system32",
+                ".php on line", ".py\", line", ".java\", line",
+                ".js\", line", ".cs\", line", ".rb\", line"
             ],
             "severity": "HIGH",
             "type": "File Path Disclosure"
@@ -268,40 +180,12 @@ def analyze_response(content, headers):
 
         "database_error": {
             "patterns": [
-                "sql syntax",
-                "mysql error",
-                "postgresql error",
-                "sqlite error",
-                "oracle error",
-                "mssql error",
-                "sql server error",
-                "query failed",
-                "unknown column",
-                "syntax error near",
-                "duplicate entry",
-                "foreign key constraint",
-                "primary key constraint",
-                "unique constraint",
-                "check constraint",
-                "not null constraint",
-                "table doesn't exist",
-                "column doesn't exist",
-                "relation does not exist",
-                "invalid object name",
-                "ora-",
-                "pg_",
-                "mysql_",
-                "mysqli_",
-                "pdo_",
-                "sqlite_",
-                "sqlalchemy",
-                "hibernate",
-                "entityframework",
-                "sequelize",
-                "mongoose",
-                "prisma",
-                "typeorm",
-                "knex"
+                "sql syntax", "mysql error", "postgresql error",
+                "sqlite error", "oracle error", "query failed",
+                "unknown column", "syntax error near",
+                "table doesn't exist", "column doesn't exist",
+                "relation does not exist", "ora-", "pg_",
+                "mysql_", "mysqli_", "pdo_", "sqlite_"
             ],
             "severity": "HIGH",
             "type": "Database Error Disclosure"
@@ -309,55 +193,12 @@ def analyze_response(content, headers):
 
         "modern_frameworks": {
             "patterns": [
-                "nextjs",
-                "react-dom",
-                "hydration failed",
-                "minified react error",
-                "react.development.js",
-                "react.production.min.js",
-                "vue.runtime.esm.js",
-                "avoid app logic that relies on enumerating keys",
-                "vue.common.dev.js",
-                "vue.common.prod.js",
-                "ng0",
-                "angular jit compilation failed",
-                "zone.js",
-                "angular/core",
-                "angular/common",
-                "angular/router",
-                "angular/forms",
-                "angular/platform-browser",
-                "graphql error",
-                "cannot query field",
-                "field \"",
-                "undefined field",
-                "graphql/validation",
-                "graphql/execution",
-                "graphql/language",
-                "graphql/type",
-                "graphql/utilities",
-                "graphql/error",
-                "aws_request_id",
-                "lambda",
-                "function error",
-                "task timed out",
-                "lambda_handler",
-                "x-amzn-errortype",
-                "x-amzn-requestid",
-                "azurewebsites.net",
-                "gcp-project-id",
-                "firebase",
-                "cloudflare",
-                "heroku",
-                "vercel",
-                "netlify",
-                "railway",
-                "render",
-                "fly.io",
-                "neon.tech",
-                "planetscale",
-                "cockroachlabs",
-                "mongodb.net"
+                "nextjs", "react-dom", "hydration failed",
+                "vue.runtime.esm.js", "ng0", "angular jit",
+                "zone.js", "graphql error", "cannot query field",
+                "aws_request_id", "lambda", "x-amzn-errortype",
+                "firebase", "cloudflare", "heroku", "vercel",
+                "netlify", "railway", "render", "mongodb.net"
             ],
             "severity": "HIGH",
             "type": "Modern Framework Error Disclosure"
@@ -365,30 +206,11 @@ def analyze_response(content, headers):
 
         "api_errors": {
             "patterns": [
-                "json.decoder.jsondecodeerror",
-                "invalid json",
-                "unexpected token",
-                "\"errors\": [",
-                "\"message\": \"",
-                "validation failed",
-                "schema validation error",
-                "required field missing",
-                "invalid type for field",
-                "malformed request",
-                "bad request",
-                "invalid parameter",
-                "parameter validation",
-                "type mismatch",
-                "enum validation",
-                "format validation",
-                "pattern validation",
-                "minimum validation",
-                "maximum validation",
-                "minlength validation",
-                "maxlength validation",
-                "minitems validation",
-                "maxitems validation",
-                "uniqueitems validation"
+                "json.decoder.jsondecodeerror", "invalid json",
+                "unexpected token", "\"errors\": [", "\"message\": \"",
+                "validation failed", "schema validation error",
+                "required field missing", "invalid type for field",
+                "malformed request", "bad request", "type mismatch"
             ],
             "severity": "MEDIUM",
             "type": "API Error Disclosure"
@@ -396,29 +218,10 @@ def analyze_response(content, headers):
 
         "framework_errors": {
             "patterns": [
-                "illuminate\\database",
-                "django.db.utils",
-                "whitelabel error page",
-                "server error in '/' application",
-                "springframework",
-                "flask app",
-                "expressjs",
-                "koa.js",
-                "fastify",
-                "hapi.js",
-                "rails",
-                "laravel",
-                "symfony",
-                "zend",
-                "cakephp",
-                "codeigniter",
-                "yii",
-                "django",
-                "flask",
-                "express",
-                "koa",
-                "fastify",
-                "hapi"
+                "illuminate\\database", "django.db.utils",
+                "whitelabel error page", "server error in '/' application",
+                "springframework", "flask app", "expressjs",
+                "django", "flask", "express", "koa", "fastify"
             ],
             "severity": "HIGH",
             "type": "Framework Error Disclosure"
@@ -426,29 +229,12 @@ def analyze_response(content, headers):
 
         "debug_info": {
             "patterns": [
-                "debug mode",
-                "debug=true",
-                "display_errors",
-                "notice:",
-                "warning:",
-                "fatal error",
-                "strict standards",
-                "deprecated",
-                "parse error",
-                "syntax error",
-                "undefined variable",
-                "undefined index",
-                "undefined offset",
-                "call to undefined function",
-                "class not found",
-                "interface not found",
-                "trait not found",
-                "namespace not found",
-                "use statement not found",
-                "constant not found",
-                "function not found",
-                "method not found",
-                "property not found"
+                "debug mode", "debug=true", "display_errors",
+                "notice:", "warning:", "fatal error",
+                "strict standards", "deprecated", "parse error",
+                "syntax error", "undefined variable", "undefined index",
+                "undefined offset", "call to undefined function",
+                "class not found", "function not found"
             ],
             "severity": "MEDIUM",
             "type": "Debug Information Disclosure"
@@ -465,14 +251,12 @@ def analyze_response(content, headers):
                     'context': get_context(content, pattern)
                 })
 
-
                 if config['severity'] == 'CRITICAL':
                     severity = 'CRITICAL'
                 elif config['severity'] == 'HIGH' and severity not in ['CRITICAL']:
                     severity = 'HIGH'
                 elif config['severity'] == 'MEDIUM' and severity not in ['CRITICAL', 'HIGH']:
                     severity = 'MEDIUM'
-
 
     server_header = headers.get('Server', '')
     if server_header and any(keyword in server_header.lower() for keyword in ['apache', 'nginx', 'iis', 'tomcat', 'gunicorn', 'uwsgi']):
@@ -522,24 +306,27 @@ def analyze_response(content, headers):
 
 def get_context(content, pattern, context_size=150):
     """Получение контекста вокруг найденного паттерна"""
-    match = re.search(re.escape(pattern), content, re.IGNORECASE)
-    if match:
-        start = max(0, match.start() - context_size)
-        end = min(len(content), match.end() + context_size)
-        context = content[start:end]
-        if len(context) > context_size * 2:
-            lines = context.split('\n')
-            if len(lines) > 3:
-                context = '\n'.join(lines[:3]) + '...'
-        return context
+    try:
+        match = re.search(re.escape(pattern), content, re.IGNORECASE)
+        if match:
+            start = max(0, match.start() - context_size)
+            end = min(len(content), match.end() + context_size)
+            context = content[start:end]
+            if len(context) > context_size * 2:
+                lines = context.split('\n')
+                if len(lines) > 3:
+                    context = '\n'.join(lines[:3]) + '...'
+            return context
+    except:
+        pass
     return None
 
 
 def run():
     """Основная функция запуска сканера"""
     print(f"\n{Fore.CYAN}{'=' * 80}")
-    print(f"{Fore.CYAN}║{Fore.GREEN}           ADVANCED ERROR MESSAGE DISCLOSURE SCANNER v2.0              {Fore.CYAN}║")
-    print(f"{Fore.CYAN}║{Fore.YELLOW}                   Professional Bug Bounty Edition                       {Fore.CYAN}║")
+    print(f"{Fore.CYAN}║{Fore.GREEN}           ETHICAL ERROR DISCLOSURE SCANNER v2.1                    {Fore.CYAN}║")
+    print(f"{Fore.CYAN}║{Fore.YELLOW}              Safe for Bug Bounty Programs (35 Payloads)              {Fore.CYAN}║")
     print(f"{Fore.CYAN}{'=' * 80}{Style.RESET_ALL}")
 
     target = input(
@@ -555,99 +342,137 @@ def run():
         input(f"\n{Fore.BLUE}Press Enter to return to menu...{Style.RESET_ALL}")
         return
 
-    print(f"\n{Fore.CYAN}[+] Analyzing error message disclosure for: {target}{Style.RESET_ALL}")
+    # ЭТИЧЕСКАЯ ПРОВЕРКА ПЕРЕД ЗАПУСКОМ
+    if not is_safe_to_test(target):
+        input(f"\n{Fore.BLUE}Press Enter to exit...{Style.RESET_ALL}")
+        return
+
+    print(f"\n{Fore.CYAN}[+] Starting SAFE scan for: {target}{Style.RESET_ALL}")
+    print(f"{Fore.YELLOW}[!] 2.5-second delays between requests (ethical requirement){Style.RESET_ALL}")
+    print(f"{Fore.YELLOW}[!] Scan will STOP automatically if server returns 5xx errors{Style.RESET_ALL}")
 
     try:
         session = requests.Session()
         session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/json,application/xml;q=0.9,*/*;q=0.8',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'text/html,application/json,application/xml;q=0.9,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.9',
-            'Connection': 'keep-alive'
+            'Connection': 'close'
         })
 
+        # Проверка доступности сайта
+        print(f"\n{Fore.CYAN}[→] Checking target availability...{Style.RESET_ALL}")
+        try:
+            resp = session.get(target, timeout=10, verify=False)
+            if resp.status_code >= 500:
+                print(f"{Fore.RED}[!] Target already returning errors ({resp.status_code}). Aborting.{Style.RESET_ALL}")
+                input(f"\n{Fore.BLUE}Press Enter to exit...{Style.RESET_ALL}")
+                return
+            print(f"{Fore.GREEN}[✓] Target is healthy (status {resp.status_code}){Style.RESET_ALL}")
+        except Exception as e:
+            print(f"{Fore.YELLOW}[?] Could not verify target: {str(e)[:50]}{Style.RESET_ALL}")
+            print(f"{Fore.YELLOW}[!] Proceeding with scan anyway...{Style.RESET_ALL}")
 
+        # ===========================================================================
+        # БЕЗОПАСНЫЕ ПЕЙЛОАДЫ ДЛЯ БАГ-БАУНТИ (35 штук)
+        # ===========================================================================
         print(f"\n{Fore.CYAN}{'=' * 80}")
-        print(f"{Fore.CYAN}PHASE 1: GET PARAMETER ERROR TRIGGERING TESTS")
-        print(f"{Fore.YELLOW}Note: Testing various payloads to trigger error messages{Style.RESET_ALL}")
+        print(f"{Fore.CYAN}PHASE 1: GET PARAMETER ERROR TRIGGERING TESTS (25 Payloads)")
+        print(f"{Fore.YELLOW}Note: All payloads are safe and non-destructive{Style.RESET_ALL}")
         print(f"{Fore.CYAN}{'=' * 80}{Style.RESET_ALL}")
 
         test_payloads = [
-
+            # ===== КРИТИЧЕСКИ ВАЖНЫЕ (8 пейлоадов) =====
+            # 1. Простые кавычки для вызова синтаксических ошибок SQL/NoSQL
             ('id', "'"),
             ('id', '"'),
-            ('id', '1 OR 1=1'),
-            ('id', "1' AND 1=CONVERT(int,(SELECT @@version))--"),
-            ('id', "1' AND EXTRACTVALUE(1,CONCAT(0x5c,(SELECT table_name FROM information_schema.tables LIMIT 1)))--"),
-            ('id', "1' AND JSON_KEYS((SELECT CONVERT((SELECT CONCAT(0x3a,(SELECT GROUP_CONCAT(column_name) FROM information_schema.columns WHERE table_name='users'),0x3a)) USING utf8)))--"),
-            ('id', "1' AND 1=(SELECT 1 FROM pg_sleep(5))--"),
-            ('id', "1' AND (SELECT 1 FROM (SELECT(SLEEP(5)))a)--"),
-            ('search', "' UNION SELECT NULL,NULL,NULL--"),
-            ('sort', "'; DROP TABLE users;--"),
-
+            
+            # 2. NoSQL Injection (безопасные, не вызывают нагрузку)
             ('id', '{"$ne":null}'),
             ('filter', '{"$gt":""}'),
-            ('query', '{"$where":"sleep(5000)"}'),
-            ('email', "admin' || '1'=='1"),
-            ('sort', "{'$ne':1}"),
-
-            ('id', '../../../../etc/passwd'),
-            ('file', '../../../../../../etc/passwd%00'),
-            ('file', '..%2F..%2F..%2Fetc%2Fpasswd'),
-            ('path', '%2e%2e%2f%2e%2e%2fetc%2fshadow'),
-            ('doc', '....//....//etc/passwd'),
-
+            
+            # 3. SSTI (Server-Side Template Injection) - безопасные вычисления
             ('name', "{{7*7}}"),
             ('template', "<%= 7*7 %>"),
-            ('search', "${{7*7}}"),
-            ('query', "{{request.application.__globals__.__builtins__.__import__('os').popen('id').read()}}"),
-            ('lang', "{{''.__class__.__mro__[1].__subclasses__()}}"),
-
+            
+            # 4. GraphQL интроспекция (стандартный безопасный запрос)
             ('query', '{"query":"{__schema{types{name}}}"}'),
-            ('variables', '{"id":"\'"}'),
-
-            ('data', '{"id": "invalid_json"}'),
-            ('callback', "javascript:alert(1)"),
-
-            ('id', '1&id=2&id=3'),
-            ('sort', 'name,id,nonexistent'),
-
+            
+            # 5. Простой паттерн для обнаружения ошибок валидации
+            ('id', '1 OR 1=1'),
+            
+            # ===== ВЫСОКИЕ ПРИОРИТЕТЫ (12 пейлоадов) =====
+            # 6. Невалидные типы данных (часто раскрывают структуру)
             ('limit', '[]'),
             ('page', '{}'),
             ('count', 'true'),
             ('items', 'null'),
+            
+            # 7. Числовые аномалии
             ('timestamp', 'NaN'),
             ('price', 'Infinity'),
-            
-
-            ('token', 'Bearer invalid_jwt_token_here'),
-            ('api_key', 'sk_test_' + 'A'*100),
-            ('callback', 'https://attacker.com'),
-            ('page', 'nonexistentpage'),
             ('limit', '-1'),
             ('offset', '999999999'),
-            ('test', '<script>alert(1)</script>'),
-            ('param', '${{7*7}}'),
-            ('data', '<?php system("id"); ?>'),
-            ('cmd', 'cat /etc/passwd'),
+            
+            # 8. Несуществующие значения
+            ('page', 'nonexistentpage'),
+            ('sort', 'nonexistent_field'),
+            
+            # 9. Специальные символы
+            ('test', '<>'),
+            ('search', 'test&<>"\''),
+            
+            # ===== СРЕДНИЕ ПРИОРИТЕТЫ (10 пейлоадов) =====
+            # 10. Parameter Pollution
+            ('id', '1&id=2&id=3'),
+            ('sort', 'name,id,created_at'),
+            
+            # 11. Отладочные параметры
             ('debug', '1'),
+            ('verbose', 'true'),
+            
+            # 12. API-специфичные
             ('fields', 'id,name,nonexistent_field,created_at'),
             ('include', 'user,nonexistent_relation,comments'),
             ('version', '999999'),
-            ('id', "1'; WAITFOR DELAY '0:0:5'--"),
-            ('id', "1' AND SLEEP(5)--")
+            
+            # 13. Токены и ключи (невалидные)
+            ('token', 'Bearer invalid_jwt_token_here'),
+            ('api_key', 'sk_test_invalid_1234567890'),
+            
+            # 14. Callback для JSONP/CORS проверок
+            ('callback', 'https://example.com'),
+            
+            # 15. XSS-подобные (безопасные для тестирования ошибок)
+            ('test', '<script>alert(1)</script>'),
+            
+            # 16. JSON-специфичные ошибки
+            ('data', '{"malformed": "json"'),
+            
+            # 17. Email/URL валидация
+            ('email', 'invalid_email_format'),
+            ('url', 'javascript:alert(1)')
         ]
 
         all_findings = []
         total_tests = 0
         vulnerabilities_found = 0
+        server_overloaded = False
 
         for param, payload in test_payloads:
+            if server_overloaded:
+                print(f"\n{Fore.YELLOW}[!] Skipping remaining tests due to server overload.{Style.RESET_ALL}")
+                break
+                
             total_tests += 1
-            payload_display = payload[:50] + '...' if len(payload) > 50 else payload
+            payload_display = payload[:45] + '...' if len(payload) > 45 else payload
             print(f"\n{Fore.CYAN}[→] Test {total_tests}/{len(test_payloads)}: {param}={payload_display}{Style.RESET_ALL}")
 
-            status, content, headers = test_error_trigger(target, f"{param}={payload}")
+            status, content, headers = test_error_trigger(target, f"{param}={payload}", session=session)
+
+            if status == "OVERLOAD":
+                server_overloaded = True
+                continue
 
             if status:
                 status_color = Fore.GREEN if status < 400 else (Fore.YELLOW if status < 500 else Fore.RED)
@@ -671,74 +496,83 @@ def run():
             else:
                 print(f"    {Fore.YELLOW}[?] Request failed (timeout/error){Style.RESET_ALL}")
 
-            time.sleep(0.5) 
+            # БЕЗОПАСНАЯ ПАУЗА для баг-баунти
+            time.sleep(2.5)
 
-        print(f"\n{Fore.CYAN}{'=' * 80}")
-        print(f"{Fore.CYAN}PHASE 2: POST JSON API ERROR HANDLING TESTS")
-        print(f"{Fore.YELLOW}Note: Testing JSON payloads for API error disclosure{Style.RESET_ALL}")
-        print(f"{Fore.CYAN}{'=' * 80}{Style.RESET_ALL}")
+        # ===========================================================================
+        # POST JSON ТЕСТЫ (10 пейлоадов)
+        # ===========================================================================
+        if not server_overloaded:
+            print(f"\n{Fore.CYAN}{'=' * 80}")
+            print(f"{Fore.CYAN}PHASE 2: POST JSON API ERROR HANDLING TESTS (10 Payloads)")
+            print(f"{Fore.YELLOW}Note: Testing JSON payloads for API error disclosure{Style.RESET_ALL}")
+            print(f"{Fore.CYAN}{'=' * 80}{Style.RESET_ALL}")
 
-        json_payloads = [
-            {"id": "invalid_type"},
-            {"filter": {"$ne": "bypass"}},
-            {"search": "<script>alert(1)</script>"},
-            {"limit": "NaN"},
-            {"include": ["user", "nonexistent"]},
-            {"fields": "id,name,nonexistent_field"},
-            {"data": "${{7*7}}"},
-            {"query": "{{7*7}}"},
-            {"callback": "javascript:alert(1)"},
-            {"token": "Bearer invalid_token_1234567890"},
-            {"api_key": "sk_test_" + "A"*100},
-            {"password": "invalid_password_with_special_chars!@#$%^&*()"},
-            {"email": "invalid_email_format"},
-            {"timestamp": "invalid_timestamp"},
-            {"price": "Infinity"},
-            {"quantity": "-1"},
-            {"page": "nonexistent"},
-            {"sort": ["name", "invalid_field"]},
-            {"filter": {"status": {"$ne": "active"}}},
-            {"search": "' OR '1'='1"}
-        ]
+            json_payloads = [
+                {"id": "invalid_type"},
+                {"filter": {"$ne": "bypass"}},
+                {"limit": "NaN"},
+                {"include": ["user", "nonexistent"]},
+                {"fields": "id,name,nonexistent_field"},
+                {"data": "${{7*7}}"},
+                {"query": "{{7*7}}"},
+                {"token": "Bearer invalid_token_123"},
+                {"api_key": "sk_test_invalid_key"},
+                {"search": "' OR '1'='1"}
+            ]
 
-        for i, json_data in enumerate(json_payloads, 1):
-            print(f"\n{Fore.CYAN}[→] JSON Test {i}/{len(json_payloads)}: {str(json_data)[:60]}{Style.RESET_ALL}")
-            
-            try:
-                status, content, headers = test_error_trigger(target, None, method='POST', json_data=json_data)
-                
-                if status:
-                    status_color = Fore.GREEN if status < 400 else (Fore.YELLOW if status < 500 else Fore.RED)
-                    print(f"    Status: {status_color}{status}{Style.RESET_ALL}")
-
-                    findings, severity = analyze_response(content, headers)
-
-                    if findings:
-                        vulnerabilities_found += 1
-                        severity_color = Fore.MAGENTA if severity == 'CRITICAL' else (
-                            Fore.RED if severity == 'HIGH' else (Fore.YELLOW if severity == 'MEDIUM' else Fore.CYAN))
-                        print(
-                            f"    {severity_color}[!] {len(findings)} issue(s) found (Severity: {severity}){Style.RESET_ALL}")
-
-                        for finding in findings[:3]:
-                            print(f"      • {finding['type']} ({finding['severity']})")
-
-                        all_findings.extend(findings)
-                    else:
-                        print(f"    {Fore.GREEN}[✓] No sensitive information disclosed{Style.RESET_ALL}")
-                else:
-                    print(f"    {Fore.YELLOW}[?] Request failed (timeout/error){Style.RESET_ALL}")
+            for i, json_data in enumerate(json_payloads, 1):
+                if server_overloaded:
+                    break
                     
-            except Exception as e:
-                print(f"    {Fore.YELLOW}[?] Error: {str(e)[:50]}{Style.RESET_ALL}")
-            
-            time.sleep(0.8)
+                print(f"\n{Fore.CYAN}[→] JSON Test {i}/{len(json_payloads)}: {str(json_data)[:55]}{Style.RESET_ALL}")
+                
+                try:
+                    status, content, headers = test_error_trigger(target, None, method='POST', json_data=json_data, session=session)
+                    
+                    if status == "OVERLOAD":
+                        server_overloaded = True
+                        continue
+                    
+                    if status:
+                        status_color = Fore.GREEN if status < 400 else (Fore.YELLOW if status < 500 else Fore.RED)
+                        print(f"    Status: {status_color}{status}{Style.RESET_ALL}")
 
+                        findings, severity = analyze_response(content, headers)
+
+                        if findings:
+                            vulnerabilities_found += 1
+                            severity_color = Fore.MAGENTA if severity == 'CRITICAL' else (
+                                Fore.RED if severity == 'HIGH' else (Fore.YELLOW if severity == 'MEDIUM' else Fore.CYAN))
+                            print(
+                                f"    {severity_color}[!] {len(findings)} issue(s) found (Severity: {severity}){Style.RESET_ALL}")
+
+                            for finding in findings[:3]:
+                                print(f"      • {finding['type']} ({finding['severity']})")
+
+                            all_findings.extend(findings)
+                        else:
+                            print(f"    {Fore.GREEN}[✓] No sensitive information disclosed{Style.RESET_ALL}")
+                    else:
+                        print(f"    {Fore.YELLOW}[?] Request failed (timeout/error){Style.RESET_ALL}")
+                        
+                except Exception as e:
+                    print(f"    {Fore.YELLOW}[?] Error: {str(e)[:50]}{Style.RESET_ALL}")
+                
+                time.sleep(2.5)
+
+        # ===========================================================================
+        # РЕЗУЛЬТАТЫ И ОТЧЕТ
+        # ===========================================================================
         print(f"\n{Fore.CYAN}{'=' * 80}")
         print(f"{Fore.CYAN}RESULTS SUMMARY & SECURITY ASSESSMENT")
         print(f"{Fore.CYAN}{'=' * 80}{Style.RESET_ALL}")
 
-        print(f"\n{Fore.GREEN}Total tests performed: {total_tests + len(json_payloads)}{Style.RESET_ALL}")
+        actual_tests = total_tests
+        if not server_overloaded:
+            actual_tests += len(json_payloads)
+
+        print(f"\n{Fore.GREEN}Total tests performed: {actual_tests}{Style.RESET_ALL}")
         print(f"{Fore.RED}Vulnerabilities found: {vulnerabilities_found}{Style.RESET_ALL}")
 
         severity_counts = {'CRITICAL': 0, 'HIGH': 0, 'MEDIUM': 0, 'LOW': 0}
@@ -845,12 +679,6 @@ def run():
             print(f"   • Rotate keys regularly")
             print(f"   • Implement secret scanning in CI/CD")
 
-            print(f"\n{Fore.YELLOW}7. Regular Security Testing:{Style.RESET_ALL}")
-            print(f"   • Conduct penetration testing")
-            print(f"   • Use automated security scanning tools")
-            print(f"   • Perform code reviews for error handling")
-            print(f"   • Monitor security advisories")
-
         else:
             print(f"\n{Fore.GREEN}[✓] No error message disclosure vulnerabilities detected{Style.RESET_ALL}")
             print(f"\n{Fore.CYAN}Security Best Practices (Maintain These):{Style.RESET_ALL}")
@@ -863,71 +691,64 @@ def run():
             print(f"   • Keep dependencies updated")
             print(f"   • Conduct regular security audits")
 
+        # ===========================================================================
+        # ДОПОЛНИТЕЛЬНЫЕ ПРОВЕРКИ
+        # ===========================================================================
+        if not server_overloaded:
+            print(f"\n{Fore.CYAN}{'=' * 80}")
+            print(f"{Fore.CYAN}ADDITIONAL SECURITY CHECKS")
+            print(f"{Fore.CYAN}{'=' * 80}{Style.RESET_ALL}")
 
-        print(f"\n{Fore.CYAN}{'=' * 80}")
-        print(f"{Fore.CYAN}ADDITIONAL SECURITY CHECKS")
-        print(f"{Fore.CYAN}{'=' * 80}{Style.RESET_ALL}")
+            print(f"\n{Fore.CYAN}[→] Checking server response headers...{Style.RESET_ALL}")
 
-        print(f"\n{Fore.CYAN}[→] Checking server response headers...{Style.RESET_ALL}")
+            try:
+                response = session.get(target, timeout=10, verify=False)
 
-        try:
-            response = session.get(target, timeout=10, verify=False)
+                headers_to_check = [
+                    'Server', 'X-Powered-By', 'X-AspNet-Version', 'X-AspNetMvc-Version',
+                    'X-Debug-Token', 'X-Runtime', 'X-Version', 'X-Backend-Server',
+                    'X-Cache', 'X-Served-By', 'X-Amzn-Trace-Id', 'X-Correlation-Id',
+                    'X-Request-Id', 'Server-Timing'
+                ]
 
-            headers_to_check = [
-                'Server', 
-                'X-Powered-By', 
-                'X-AspNet-Version', 
-                'X-AspNetMvc-Version',
-                'X-Debug-Token',
-                'X-Runtime',
-                'X-Version',
-                'X-Backend-Server',
-                'X-Cache',
-                'X-Served-By',
-                'X-Amzn-Trace-Id',
-                'X-Correlation-Id',
-                'X-Request-Id',
-                'Server-Timing'
-            ]
+                disclosed_headers = 0
+                for header in headers_to_check:
+                    value = response.headers.get(header)
+                    if value:
+                        disclosed_headers += 1
+                        print(f"{Fore.YELLOW}[!] Header disclosed: {header} = {value}{Style.RESET_ALL}")
 
+                if disclosed_headers == 0:
+                    print(f"{Fore.GREEN}[✓] No sensitive headers disclosed{Style.RESET_ALL}")
 
-            disclosed_headers = 0
-            for header in headers_to_check:
-                value = response.headers.get(header)
-                if value:
-                    disclosed_headers += 1
-                    print(f"{Fore.YELLOW}[!] Header disclosed: {header} = {value}{Style.RESET_ALL}")
+                if 'x-debug' in response.headers or 'debug' in response.headers:
+                    print(f"{Fore.MAGENTA}{Style.BRIGHT}[!] DEBUG MODE DETECTED in headers!{Style.RESET_ALL}")
 
-            if disclosed_headers == 0:
-                print(f"{Fore.GREEN}[✓] No sensitive headers disclosed{Style.RESET_ALL}")
+            except Exception as e:
+                print(f"{Fore.YELLOW}[?] Could not check headers: {str(e)[:50]}{Style.RESET_ALL}")
 
-            if 'x-debug' in response.headers or 'debug' in response.headers:
-                print(f"{Fore.MAGENTA}{Style.BRIGHT}[!] DEBUG MODE DETECTED in headers!{Style.RESET_ALL}")
-
-        except Exception as e:
-            print(f"{Fore.YELLOW}[?] Could not check headers: {str(e)[:50]}{Style.RESET_ALL}")
-
+        # ===========================================================================
+        # ЮРИДИЧЕСКИЕ И ЭТИЧЕСКИЕ РЕКОМЕНДАЦИИ
+        # ===========================================================================
         print(f"\n{Fore.CYAN}{'=' * 80}")
         print(f"{Fore.CYAN}LEGAL & ETHICAL GUIDANCE FOR BUG BOUNTY")
         print(f"{Fore.CYAN}{'=' * 80}{Style.RESET_ALL}")
         print(f"\n{Fore.RED}  ⚠️  LEGAL WARNING:{Style.RESET_ALL}")
-        print(f"   • Triggering errors without authorization may violate laws")
-        print(f"   • Error testing may be logged as suspicious activity")
+        print(f"   • Unauthorized testing is ILLEGAL in most jurisdictions")
         print(f"   • Always obtain WRITTEN authorization before testing")
-        print(f"   • Document all authorized testing activities")
-        print(f"   • Never test production systems without explicit permission")
         print(f"   • Respect scope boundaries defined in bug bounty program")
+        print(f"   • Never test production systems without explicit permission")
+        print(f"   • Document all authorized testing activities")
 
         print(f"\n{Fore.GREEN} ✅ Responsible Testing Guidelines:{Style.RESET_ALL}")
         print(f"   • Test in staging/development environments first")
-        print(f"   • Coordinate with system administrators")
-        print(f"   • Use low-frequency testing (avoid DoS)")
-        print(f"   • Report findings responsibly to owners")
+        print(f"   • Use low-frequency testing (2.5+ seconds between requests)")
+        print(f"   • STOP immediately if server shows signs of overload")
+        print(f"   • Report findings responsibly through official channels")
         print(f"   • Provide detailed mitigation recommendations")
-        print(f"   • Follow responsible disclosure timeline")
 
         print(f"\n{Fore.CYAN} 📋 Bug Bounty Reporting Tips:{Style.RESET_ALL}")
-        print(f"   • Include clear reproduction steps")
+        print(f"   • Include clear reproduction steps with curl commands")
         print(f"   • Provide screenshots with highlighted issues")
         print(f"   • Explain business impact and risk level")
         print(f"   • Suggest specific fixes")
@@ -938,6 +759,7 @@ def run():
         print(f"{Fore.GREEN}[✓] Error disclosure analysis completed{Style.RESET_ALL}")
         print(f"{Fore.CYAN}{'=' * 80}{Style.RESET_ALL}")
 
+        # Сохранение результатов в файл
         if all_findings:
             filename = f"error_scan_{int(time.time())}.txt"
             with open(filename, 'w', encoding='utf-8') as f:
@@ -946,7 +768,7 @@ def run():
                 f.write("=" * 80 + "\n\n")
                 f.write(f"Target: {target}\n")
                 f.write(f"Scan Date: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
-                f.write(f"Total Tests: {total_tests + len(json_payloads)}\n")
+                f.write(f"Total Tests: {actual_tests}\n")
                 f.write(f"Vulnerabilities Found: {vulnerabilities_found}\n\n")
                 
                 f.write("SEVERITY BREAKDOWN:\n")
@@ -978,10 +800,17 @@ def run():
     except requests.exceptions.ConnectionError:
         print(f"\n{Fore.RED}[!] Connection error. Check if target is accessible.{Style.RESET_ALL}")
     except KeyboardInterrupt:
-        print(f"\n{Fore.YELLOW}[!] Scan interrupted by user.{Style.RESET_ALL}")
+        print(f"\n{Fore.YELLOW}[!] Scan interrupted by user. No harm done.{Style.RESET_ALL}")
     except Exception as e:
         print(f"\n{Fore.RED}[!] Error: {str(e)}{Style.RESET_ALL}")
         import traceback
         traceback.print_exc()
 
     input(f"\n{Fore.BLUE}Press Enter to return to menu...{Style.RESET_ALL}")
+
+
+if __name__ == "__main__":
+    import urllib3
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+    
+    run()
