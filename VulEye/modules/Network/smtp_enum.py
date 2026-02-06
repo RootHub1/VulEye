@@ -1,276 +1,186 @@
 import socket
-import re
-from colorama import init, Fore, Style
+import time
+from colorama import Fore, Style, init
+from datetime import datetime
 
 init(autoreset=True)
 
+TIMEOUT = 6
+DELAY = 0.7  
 
-def check_smtp_port(host, port):
-    try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(5)
-        result = sock.connect_ex((host, port))
-        sock.close()
-        return result == 0
-    except:
-        return False
+COMMON_USERS = [
+    "admin", "administrator", "root", "postmaster",
+    "webmaster", "info", "support", "sales", "billing"
+]
 
+results = {
+    "target": None,
+    "time": None,
+    "ports": {},
+    "banner": "",
+    "capabilities": [],
+    "auth": [],
+    "users": [],
+    "issues": [],
+    "attack_paths": []
+}
 
-def get_smtp_banner(host, port):
-    try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(5)
-        sock.connect((host, port))
-        banner = sock.recv(1024).decode('utf-8', errors='ignore').strip()
-        sock.close()
-        return banner
-    except:
-        return None
+def banner(title):
+    print(f"\n{Fore.CYAN}{'=' * 70}")
+    print(f"{Fore.CYAN}{title.center(70)}")
+    print(f"{Fore.CYAN}{'=' * 70}{Style.RESET_ALL}")
 
+def connect(host, port):
+    s = socket.socket()
+    s.settimeout(TIMEOUT)
+    s.connect((host, port))
+    return s
 
-def test_vrfy(host, port, username):
-    try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(8)
-        sock.connect((host, port))
-        sock.recv(1024)
-
-        sock.send(f'HELO scanner\r\n'.encode())
-        sock.recv(1024)
-
-        sock.send(f'VRFY {username}\r\n'.encode())
-        response = sock.recv(1024).decode('utf-8', errors='ignore')
-        sock.close()
-
-        if '250' in response or '252' in response:
-            return True, response.strip()
-        elif '550' in response or '553' in response:
-            return False, response.strip()
-        else:
-            return None, response.strip()
-    except:
-        return None, None
+def recv(sock):
+    return sock.recv(4096).decode(errors="ignore")
 
 
-def test_auth_methods(host, port):
-    try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(5)
-        sock.connect((host, port))
-        sock.recv(1024)
+def smtp_handshake(host, port):
+    sock = connect(host, port)
+    banner = recv(sock)
+    sock.send(b"EHLO scanner\r\n")
+    ehlo = recv(sock)
+    return sock, banner.strip(), ehlo
 
-        sock.send(b'EHLO scanner\r\n')
-        response = sock.recv(2048).decode('utf-8', errors='ignore')
-        sock.close()
+def parse_capabilities(ehlo):
+    caps = []
+    for line in ehlo.splitlines():
+        if line.startswith("250"):
+            caps.append(line.replace("250-", "").replace("250 ", "").strip())
+    return caps
 
-        auth_methods = []
-        for line in response.split('\n'):
-            if 'auth' in line.lower():
-                auth_methods.append(line.strip())
+def check_ports(host):
+    ports = [25, 587, 465]
+    open_ports = []
+    for p in ports:
+        try:
+            s = socket.socket()
+            s.settimeout(3)
+            if s.connect_ex((host, p)) == 0:
+                open_ports.append(p)
+            s.close()
+        except:
+            pass
+    return open_ports
 
-        return auth_methods, response
-    except:
-        return [], None
+def vrfy_enum(sock, user):
+    sock.send(f"VRFY {user}\r\n".encode())
+    r = recv(sock)
+    if r.startswith("250"):
+        return "VALID"
+    if r.startswith("252"):
+        return "AMBIGUOUS"
+    if r.startswith("550"):
+        return "INVALID"
+    return "UNKNOWN"
+
+def expn_test(sock):
+    sock.send(b"EXPN postmaster\r\n")
+    return recv(sock)
+
+def rcpt_test(sock, user, domain):
+    sock.send(b"MAIL FROM:<test@test.com>\r\n")
+    recv(sock)
+    sock.send(f"RCPT TO:<{user}@{domain}>\r\n".encode())
+    return recv(sock)
 
 
 def run():
-    print(f"\n{Fore.CYAN}{'=' * 70}")
-    print(f"{Fore.CYAN}║{Fore.GREEN}              SMTP USER ENUMERATOR                                 {Fore.CYAN}║")
-    print(f"{Fore.CYAN}{'=' * 70}{Style.RESET_ALL}")
+    banner("SMTP ENUMERATION — PRO")
 
-    target = input(f"\n{Fore.YELLOW}Enter target mail server (IP or hostname): {Style.RESET_ALL}").strip()
+    target = input(f"{Fore.YELLOW}Target SMTP host: {Style.RESET_ALL}").strip()
+    domain = target.split(".")[-2] + "." + target.split(".")[-1] if "." in target else target
 
-    if not target:
-        print(f"\n{Fore.RED}[!] Empty input. Aborting.{Style.RESET_ALL}")
-        input(f"\n{Fore.BLUE}Press Enter to return to menu...{Style.RESET_ALL}")
-        return
+    results["target"] = target
+    results["time"] = str(datetime.utcnow())
 
-    print(f"\n{Fore.CYAN}[+] Starting SMTP enumeration for: {target}{Style.RESET_ALL}")
-
-    print(f"\n{Fore.CYAN}{'=' * 70}")
-    print(f"{Fore.CYAN}SMTP PORT SCANNING")
-    print(f"{Fore.CYAN}{'=' * 70}{Style.RESET_ALL}")
-
-    smtp_ports = {
-        25: 'SMTP (Standard)',
-        587: 'SMTP (Submission)',
-        465: 'SMTPS (Legacy SSL)'
-    }
-
-    open_ports = []
-    for port, desc in smtp_ports.items():
-        if check_smtp_port(target, port):
-            open_ports.append(port)
-            print(f"{Fore.GREEN}[✓] Port {port} ({desc}): OPEN{Style.RESET_ALL}")
-        else:
-            print(f"{Fore.CYAN}[i] Port {port} ({desc}): closed/filtered{Style.RESET_ALL}")
+    
+    banner("PORT DISCOVERY")
+    open_ports = check_ports(target)
+    for p in open_ports:
+        print(f"{Fore.GREEN}[✓] {p}/tcp OPEN{Style.RESET_ALL}")
+        results["ports"][p] = True
 
     if not open_ports:
-        print(f"\n{Fore.RED}[!] No SMTP ports open. Mail service may be disabled or filtered.{Style.RESET_ALL}")
-        input(f"\n{Fore.BLUE}Press Enter to return to menu...{Style.RESET_ALL}")
+        print(f"{Fore.RED}[!] No SMTP ports reachable{Style.RESET_ALL}")
         return
 
-    primary_port = open_ports[0]
-    print(f"\n{Fore.GREEN}[✓] Using port {primary_port} for enumeration{Style.RESET_ALL}")
+    port = open_ports[0]
 
-    print(f"\n{Fore.CYAN}{'=' * 70}")
-    print(f"{Fore.CYAN}SMTP BANNER GRABBING")
-    print(f"{Fore.CYAN}{'=' * 70}{Style.RESET_ALL}")
+   
+    banner("SMTP HANDSHAKE")
+    sock, banner_text, ehlo = smtp_handshake(target, port)
+    results["banner"] = banner_text
+    print(banner_text)
 
-    banner = get_smtp_banner(target, primary_port)
-    if banner:
-        print(f"\n{Fore.GREEN}[✓] SMTP Banner:{Style.RESET_ALL}")
-        print(f"   {banner}")
+    caps = parse_capabilities(ehlo)
+    results["capabilities"] = caps
 
-        server_info = {}
-        if 'microsoft' in banner.lower() or 'exchange' in banner.lower():
-            server_info['type'] = 'Microsoft Exchange'
-        elif 'postfix' in banner.lower():
-            server_info['type'] = 'Postfix'
-        elif 'exim' in banner.lower():
-            server_info['type'] = 'Exim'
-        elif 'sendmail' in banner.lower():
-            server_info['type'] = 'Sendmail'
-        elif 'qmail' in banner.lower():
-            server_info['type'] = 'Qmail'
+    for c in caps:
+        print(f"{Fore.CYAN}• {c}{Style.RESET_ALL}")
+        if "STARTTLS" in c:
+            results["issues"].append("INFO: STARTTLS supported")
+        if "AUTH" in c:
+            results["auth"].append(c)
 
-        if 'type' in server_info:
-            print(f"   {Fore.CYAN}Server Type:{Style.RESET_ALL} {server_info['type']}")
-    else:
-        print(f"{Fore.YELLOW}[!] Could not retrieve SMTP banner{Style.RESET_ALL}")
+    
+    banner("USER ENUMERATION (SAFE)")
+    for user in COMMON_USERS:
+        status = vrfy_enum(sock, user)
+        time.sleep(DELAY)
 
-    print(f"\n{Fore.CYAN}{'=' * 70}")
-    print(f"{Fore.CYAN}AUTHENTICATION METHODS")
-    print(f"{Fore.CYAN}{'=' * 70}{Style.RESET_ALL}")
+        if status == "VALID":
+            results["users"].append(user)
+            print(f"{Fore.RED}[✓] VALID USER: {user}{Style.RESET_ALL}")
+        elif status == "AMBIGUOUS":
+            print(f"{Fore.YELLOW}[?] {user}: ambiguous response{Style.RESET_ALL}")
 
-    auth_methods, ehlo_response = test_auth_methods(target, primary_port)
-    if auth_methods:
-        print(f"\n{Fore.YELLOW}[!] Authentication methods supported:{Style.RESET_ALL}")
-        for method in auth_methods:
-            print(f"   • {method}")
-            if 'login' in method.lower() or 'plain' in method.lower():
-                print(f"     {Fore.RED}  WEAK AUTHENTICATION - credentials sent in plaintext{Style.RESET_ALL}")
-    else:
-        print(f"{Fore.CYAN}[i] No authentication methods advertised (may require TLS){Style.RESET_ALL}")
+    
+    banner("EXPN CHECK")
+    expn = expn_test(sock)
+    if expn.startswith("250"):
+        results["issues"].append("HIGH: EXPN enabled")
+        print(f"{Fore.RED}[!] EXPN enabled{Style.RESET_ALL}")
 
-    print(f"\n{Fore.CYAN}{'=' * 70}")
-    print(f"{Fore.CYAN}USER ENUMERATION (VRFY COMMAND)")
-    print(f"{Fore.YELLOW}Note: Most production servers disable VRFY for security{Style.RESET_ALL}")
-    print(f"{Fore.CYAN}{'=' * 70}{Style.RESET_ALL}")
+    
+    banner("RCPT TO ENUM (SAFE)")
+    for user in COMMON_USERS[:3]:
+        resp = rcpt_test(sock, user, domain)
+        if resp.startswith("250"):
+            results["issues"].append("HIGH: RCPT TO user enumeration possible")
+            print(f"{Fore.RED}[!] RCPT accepted for {user}{Style.RESET_ALL}")
 
-    common_users = ['admin', 'administrator', 'root', 'postmaster', 'webmaster', 'info', 'support', 'sales', 'billing',
-                    'hostmaster']
+    sock.close()
 
-    print(f"\n{Fore.CYAN}[→] Testing {len(common_users)} common usernames...{Style.RESET_ALL}")
+    
+    banner("SECURITY ANALYSIS")
 
-    valid_users = []
-    invalid_users = []
+    if results["users"]:
+        results["issues"].append("HIGH: SMTP user enumeration possible")
+        results["attack_paths"].append(
+            "Valid users → phishing → password spraying"
+        )
 
-    for username in common_users:
-        result, response = test_vrfy(target, primary_port, username)
-        if result is True:
-            valid_users.append((username, response))
-            print(f"{Fore.GREEN}[✓] VALID USER: {username}{Style.RESET_ALL}")
-            print(f"    Response: {response[:70]}")
-        elif result is False:
-            invalid_users.append(username)
-        elif result is None:
-            print(
-                f"{Fore.YELLOW}[?] UNKNOWN: {username} (Response: {response[:50] if response else 'No response'}){Style.RESET_ALL}")
+    if any("PLAIN" in a or "LOGIN" in a for a in results["auth"]):
+        results["issues"].append("MEDIUM: Weak SMTP authentication methods")
 
-    if valid_users:
-        print(f"\n{Fore.MAGENTA}{Style.BRIGHT}[!] VALID EMAIL ACCOUNTS DISCOVERED{Style.RESET_ALL}")
-        print(f"\n{Fore.RED}  CRITICAL SECURITY ISSUE:{Style.RESET_ALL}")
-        print(f"   VRFY command enabled - attackers can enumerate valid accounts")
-        print(f"   Impact: Targeted phishing, password spraying, account takeover")
+    for i in results["issues"]:
+        color = Fore.RED if "HIGH" in i else Fore.YELLOW
+        print(f"{color}• {i}{Style.RESET_ALL}")
 
-        print(f"\n{Fore.YELLOW}Discovered accounts:{Style.RESET_ALL}")
-        for user, resp in valid_users:
-            print(f"   • {user}@{target}")
-    else:
-        print(f"\n{Fore.GREEN}[✓] No valid users enumerated via VRFY{Style.RESET_ALL}")
-        print(f"{Fore.CYAN}[i] This is expected - most secure mail servers disable VRFY/EXPN{Style.RESET_ALL}")
+    
+    banner("WHERE TO ATTACK NEXT")
+    for p in results["attack_paths"]:
+        print(f"• {p}")
 
-    print(f"\n{Fore.CYAN}{'=' * 70}")
-    print(f"{Fore.CYAN}SECURITY ASSESSMENT")
-    print(f"{Fore.CYAN}{'=' * 70}{Style.RESET_ALL}")
+    banner("DONE")
+    print(f"{Fore.GREEN}[✓] SMTP Recon completed{Style.RESET_ALL}")
+    print(f"{Fore.YELLOW}Use only with authorization{Style.RESET_ALL}")
 
-    security_issues = []
-
-    if valid_users:
-        security_issues.append({
-            'severity': 'HIGH',
-            'issue': 'VRFY Command Enabled',
-            'impact': 'User account enumeration possible',
-            'fix': 'Disable VRFY in mail server configuration'
-        })
-
-    if auth_methods and any('login' in m.lower() or 'plain' in m.lower() for m in auth_methods):
-        security_issues.append({
-            'severity': 'MEDIUM',
-            'issue': 'Plaintext Authentication Supported',
-            'impact': 'Credentials exposed on network without TLS',
-            'fix': 'Enforce STARTTLS or use port 465/587 with mandatory encryption'
-        })
-
-    if banner and ('220' not in banner):
-        security_issues.append({
-            'severity': 'LOW',
-            'issue': 'Non-standard banner',
-            'impact': 'May leak version information',
-            'fix': 'Configure generic SMTP banner'
-        })
-
-    if security_issues:
-        print(f"\n{Fore.RED}[!] SECURITY ISSUES DETECTED{Style.RESET_ALL}")
-        for issue in security_issues:
-            severity_color = Fore.MAGENTA if issue['severity'] == 'CRITICAL' else (
-                Fore.RED if issue['severity'] == 'HIGH' else (
-                    Fore.YELLOW if issue['severity'] == 'MEDIUM' else Fore.CYAN))
-            print(f"\n{severity_color}• {issue['issue']} ({issue['severity']}){Style.RESET_ALL}")
-            print(f"  Impact: {issue['impact']}")
-            print(f"  Fix: {issue['fix']}")
-    else:
-        print(f"\n{Fore.GREEN}[✓] No critical SMTP security issues detected{Style.RESET_ALL}")
-
-    print(f"\n{Fore.CYAN}{'=' * 70}")
-    print(f"{Fore.CYAN}HARDENING RECOMMENDATIONS")
-    print(f"{Fore.CYAN}{'=' * 70}{Style.RESET_ALL}")
-
-    print(f"\n{Fore.YELLOW}For Mail Server Administrators:{Style.RESET_ALL}")
-    print(f"   • Disable VRFY and EXPN commands:")
-    print(f"        Postfix: disable_vrfy_command = yes")
-    print(f"        Exim: no_vrfy_log = true")
-    print(f"   • Enforce TLS encryption for all connections")
-    print(f"   • Implement rate limiting for authentication attempts")
-    print(f"   • Use SPF, DKIM, and DMARC to prevent spoofing")
-    print(f"   • Configure generic SMTP banners (hide version info)")
-    print(f"   • Monitor logs for enumeration attempts")
-    print(f"   • Implement fail2ban or similar intrusion prevention")
-
-    print(f"\n{Fore.YELLOW}For Pentesters:{Style.RESET_ALL}")
-    print(f"   • ALWAYS obtain written authorization before SMTP testing")
-    print(f"   • Never use enumerated accounts for unauthorized access")
-    print(f"   • Document all testing activities for legal protection")
-    print(f"   • Use dedicated tools for comprehensive testing:")
-    print(f"        • smtp-user-enum (specialized tool)")
-    print(f"        • Metasploit auxiliary/scanner/smtp/smtp_enum")
-    print(f"        • Nmap smtp-commands script")
-    print(f"   • Test only during authorized assessment windows")
-
-    print(f"\n{Fore.CYAN}{'=' * 70}")
-    print(f"{Fore.CYAN}LEGAL DISCLAIMER")
-    print(f"{Fore.CYAN}{'=' * 70}{Style.RESET_ALL}")
-    print(f"\n{Fore.RED}  SMTP ENUMERATION WITHOUT AUTHORIZATION IS ILLEGAL{Style.RESET_ALL}")
-    print(f"   • Enumerating email accounts without permission = computer fraud")
-    print(f"   • May violate anti-spam laws (CAN-SPAM, GDPR Article 5)")
-    print(f"   • Even passive enumeration may be considered unauthorized access")
-    print(f"   • Always obtain WRITTEN authorization before ANY SMTP testing")
-    print(f"   • Maintain detailed logs of authorized testing activities")
-    print(f"   • Test ONLY on systems you own or have explicit written permission")
-
-    print(f"\n{Fore.CYAN}{'=' * 70}")
-    print(f"{Fore.GREEN}[✓] SMTP enumeration completed{Style.RESET_ALL}")
-    print(f"{Fore.CYAN}{'=' * 70}{Style.RESET_ALL}")
-
-    input(f"\n{Fore.BLUE}Press Enter to return to menu...{Style.RESET_ALL}")
+if __name__ == "__main__":
+    run()
