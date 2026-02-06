@@ -1,5 +1,6 @@
 import requests
-from urllib.parse import urlparse, parse_qs, urlencode, urljoin
+import re
+from urllib.parse import urlparse, parse_qs, urlencode
 from colorama import init, Fore, Style
 
 init(autoreset=True)
@@ -7,143 +8,128 @@ init(autoreset=True)
 
 def run():
     print(f"\n{Fore.CYAN}{'=' * 70}")
-    print(f"{Fore.CYAN}║{Fore.GREEN}              OPEN REDIRECT SCANNER                                {Fore.CYAN}║")
+    print(f"{Fore.CYAN}║{Fore.GREEN} ADVANCED OPEN REDIRECT SCANNER {Fore.CYAN}║")
     print(f"{Fore.CYAN}{'=' * 70}{Style.RESET_ALL}")
 
-    target = input(
-        f"\n{Fore.YELLOW}Enter target URL with redirect parameter (e.g., http://site.com/login?redirect=/home): {Style.RESET_ALL}").strip()
-
-    if not target:
-        print(f"\n{Fore.RED}[!] Empty input. Aborting.{Style.RESET_ALL}")
-        input(f"\n{Fore.BLUE}Press Enter to return to menu...{Style.RESET_ALL}")
+    target = input(f"\n{Fore.YELLOW}Target URL with params: {Style.RESET_ALL}").strip()
+    if not target.startswith(("http://", "https://")):
+        print(f"{Fore.RED}[!] Invalid URL{Style.RESET_ALL}")
+        input()
         return
-
-    if not target.startswith(('http://', 'https://')):
-        print(f"\n{Fore.RED}[!] URL must start with http:// or https://{Style.RESET_ALL}")
-        input(f"\n{Fore.BLUE}Press Enter to return to menu...{Style.RESET_ALL}")
-        return
-
-    print(f"\n{Fore.CYAN}[+] Analyzing URL for redirect parameters{Style.RESET_ALL}")
 
     parsed = urlparse(target)
-    query_params = parse_qs(parsed.query)
+    params = parse_qs(parsed.query)
 
-    redirect_params = []
-    redirect_indicators = ['url', 'redirect', 'next', 'return', 'rurl', 'goto', 'continue', 'view', 'to', 'link']
-
-    for param in query_params.keys():
-        if any(ind in param.lower() for ind in redirect_indicators):
-            redirect_params.append(param)
-
-    if not redirect_params:
-        print(f"\n{Fore.YELLOW}[i] No obvious redirect parameters detected.{Style.RESET_ALL}")
-        manual_param = input(
-            f"{Fore.YELLOW}Enter parameter name to test manually (e.g., 'redirect'): {Style.RESET_ALL}").strip()
-        if manual_param:
-            redirect_params = [manual_param]
-        else:
-            print(f"\n{Fore.RED}[!] No parameter specified. Aborting.{Style.RESET_ALL}")
-            input(f"\n{Fore.BLUE}Press Enter to return to menu...{Style.RESET_ALL}")
-            return
-
-    print(f"\n{Fore.GREEN}[✓] Testing redirect parameters: {', '.join(redirect_params)}{Style.RESET_ALL}")
-
-    print(f"\n{Fore.CYAN}{'=' * 70}")
-    print(f"{Fore.CYAN}OPEN REDIRECT TESTING RESULTS")
-    print(f"{Fore.CYAN}{'=' * 70}{Style.RESET_ALL}")
-
-    vulnerable = False
-    test_domains = [
-        ("https://example.com", "External HTTPS domain"),
-        ("http://example.com", "External HTTP domain"),
-        ("//example.com", "Protocol-relative URL"),
-        ("///example.com", "Triple-slash bypass attempt"),
-        ("javascript:alert(1)", "JavaScript injection attempt"),
-        ("data:text/html,<script>alert(1)</script>", "Data URI attempt")
+    redirect_keys = [
+        "redirect", "url", "next", "return", "r", "to",
+        "continue", "goto", "dest", "destination", "view"
     ]
 
-    base_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+    test_params = [p for p in params if any(k in p.lower() for k in redirect_keys)]
 
-    for param in redirect_params:
+    if not test_params:
+        manual = input(f"{Fore.YELLOW}No redirect param found. Enter manually: {Style.RESET_ALL}").strip()
+        if not manual:
+            return
+        test_params = [manual]
+
+    base_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+    session = requests.Session()
+    session.verify = False
+
+    payloads = [
+        "https://evil.com",
+        "http://evil.com",
+        "//evil.com",
+        "///evil.com",
+        "////evil.com/%2e%2e",
+        "https:%2f%2fevil.com",
+        "https://evil.com@target.com",
+        "https://target.com.evil.com",
+        "/\\evil.com",
+        "/%2f%2fevil.com",
+        "javascript:alert(1)",
+        "data:text/html,<script>alert(1)</script>"
+    ]
+
+    vulnerable = False
+
+    print(f"\n{Fore.GREEN}[✓] Parameters to test: {', '.join(test_params)}{Style.RESET_ALL}")
+
+    for param in test_params:
         print(f"\n{Fore.CYAN}[→] Testing parameter: {param}{Style.RESET_ALL}")
 
-        for payload, description in test_domains:
-            test_params = query_params.copy()
-            test_params[param] = [payload]
-            test_query = urlencode(test_params, doseq=True)
-            test_url = f"{base_url}?{test_query}"
+        for payload in payloads:
+            q = params.copy()
+            q[param] = payload
+            url = f"{base_url}?{urlencode(q, doseq=True)}"
 
             try:
-                response = requests.get(test_url, timeout=8, verify=False, allow_redirects=False)
+                r = session.get(url, timeout=8, allow_redirects=False)
+                location = r.headers.get("Location", "")
+                refresh = r.headers.get("Refresh", "")
+                body = r.text.lower()
 
-                redirect_location = response.headers.get('Location', '')
-                is_redirect = response.status_code in [301, 302, 303, 307, 308]
+                is_redirect = r.status_code in [301, 302, 303, 307, 308]
 
-                if is_redirect and payload in redirect_location:
+                if is_redirect and payload.split(":")[0] in location:
                     vulnerable = True
-                    print(f"{Fore.RED}[!] VULNERABLE: {param} redirects to external domain{Style.RESET_ALL}")
+                    print(f"{Fore.RED}[!] SERVER REDIRECT{Style.RESET_ALL}")
+                    print(f"    Param: {param}")
                     print(f"    Payload: {payload}")
-                    print(f"    Description: {description}")
-                    print(f"    Status: {response.status_code} → Location: {redirect_location[:80]}")
-                    if "javascript:" in payload or "data:" in payload:
-                        print(
-                            f"    {Fore.MAGENTA}  CRITICAL: Script execution possible via redirect{Style.RESET_ALL}")
+                    print(f"    Status: {r.status_code}")
+                    print(f"    Location: {location[:120]}")
                     break
 
-                elif is_redirect and "example.com" in redirect_location:
+                if "url=" in refresh.lower():
                     vulnerable = True
-                    print(f"{Fore.RED}[!] VULNERABLE: {param} redirects to external domain{Style.RESET_ALL}")
+                    print(f"{Fore.RED}[!] META REFRESH REDIRECT{Style.RESET_ALL}")
                     print(f"    Payload: {payload}")
-                    print(f"    Description: {description}")
-                    print(f"    Status: {response.status_code} → Location: {redirect_location[:80]}")
+                    print(f"    Refresh: {refresh}")
                     break
 
-                elif not is_redirect and ("example.com" in response.text or "window.location" in response.text.lower()):
-                    print(f"{Fore.YELLOW}[?] Potential client-side redirect detected{Style.RESET_ALL}")
-                    print(f"    Payload: {payload}")
-                    print(f"    Check manually for JavaScript-based redirection")
+                js_patterns = [
+                    "window.location",
+                    "location.href",
+                    "document.location",
+                    "location.replace"
+                ]
 
-            except requests.exceptions.Timeout:
-                continue
+                if any(p in body for p in js_patterns):
+                    if "evil.com" in body or payload.lower() in body:
+                        print(f"{Fore.YELLOW}[!] CLIENT-SIDE REDIRECT (JS){Style.RESET_ALL}")
+                        print(f"    Payload: {payload}")
+                        vulnerable = True
+                        break
+
             except Exception:
                 continue
 
     print(f"\n{Fore.CYAN}{'=' * 70}")
-    print(f"{Fore.CYAN}OPEN REDIRECT TESTING COMPLETE")
+    print(f"{Fore.CYAN}RESULT")
     print(f"{Fore.CYAN}{'=' * 70}{Style.RESET_ALL}")
 
     if vulnerable:
-        print(f"\n{Fore.RED}[!] OPEN REDIRECT VULNERABILITY CONFIRMED{Style.RESET_ALL}")
-        print(f"\n{Fore.YELLOW}Risk Level: MEDIUM to HIGH{Style.RESET_ALL}")
-        print(f"   • Phishing attacks: attackers can craft trusted-looking links")
-        print(f"   • Credential theft via fake login pages")
-        print(f"   • Malware distribution through trusted domains")
-        print(f"   • Reputation damage to your organization")
+        print(f"{Fore.RED}[!] OPEN REDIRECT CONFIRMED{Style.RESET_ALL}")
+        print(f"\n{Fore.YELLOW}Impact:{Style.RESET_ALL}")
+        print(" • Phishing via trusted domain")
+        print(" • OAuth token theft")
+        print(" • Malware delivery")
+        print(" • Trust abuse")
 
-        print(f"\n{Fore.YELLOW}Critical Recommendations:{Style.RESET_ALL}")
-        print(f"   • NEVER use raw user input in redirect URLs")
-        print(f"   • Implement allowlist validation:")
-        print(f"        allowed = ['/home', '/dashboard', '/profile']")
-        print(f"        if redirect not in allowed: redirect = '/default'")
-        print(f"   • Use relative paths only (validate no '://' in input)")
-        print(f"   • For external redirects, require explicit confirmation page")
-        print(f"   • Sanitize with:")
-        print(f"        from urllib.parse import urlparse")
-        print(f"        if urlparse(user_input).scheme: abort()")
-        print(f"   • Add security warning before external redirects")
+        print(f"\n{Fore.YELLOW}Remediation:{Style.RESET_ALL}")
+        print(" • Use allowlist for redirect targets")
+        print(" • Reject absolute URLs")
+        print(" • Disallow protocol-relative URLs (//)")
+        print(" • Validate with urlparse().netloc == ''")
+        print(" • Add confirmation page for external redirects")
     else:
-        print(f"\n{Fore.GREEN}[✓] No obvious Open Redirect vulnerabilities detected{Style.RESET_ALL}")
-        print(f"\n{Fore.YELLOW}Important Notes:{Style.RESET_ALL}")
-        print(f"   • This test checks common bypasses only")
-        print(f"   • Test with authenticated sessions")
-        print(f"   • Check JavaScript-based redirects manually")
-        print(f"   • Validate both server-side AND client-side redirection logic")
+        print(f"{Fore.GREEN}[✓] No open redirect detected{Style.RESET_ALL}")
 
     print(f"\n{Fore.CYAN}{'=' * 70}")
-    print(f"{Fore.GREEN}[✓] Open Redirect analysis completed{Style.RESET_ALL}")
-    print(f"{Fore.CYAN}{'=' * 70}{Style.RESET_ALL}")
-    print(f"\n{Fore.YELLOW}⚠️  LEGAL REMINDER:{Style.RESET_ALL}")
-    print(f"   Redirecting users without consent may violate computer fraud laws.")
-    print(f"   Always obtain written authorization before testing.")
+    input()
 
-    input(f"\n{Fore.BLUE}Press Enter to return to menu...{Style.RESET_ALL}")
+
+if __name__ == "__main__":
+    requests.packages.urllib3.disable_warnings()
+    run()
