@@ -239,6 +239,17 @@ class APIHunterPro:
         
         print(f"\n{Fore.GREEN + Style.BRIGHT}📊 FULL EXPLOIT REPORT: {json_file}{Style.RESET_ALL}")
 
+
+def run():
+    '''Wrapper function for main.py integration'''
+    try:
+        main()
+    except KeyboardInterrupt:
+        pass
+    except Exception as e:
+        print(f"Error: {e}")
+
+
 def main():
     parser = argparse.ArgumentParser(description='🔥 API Hunter Pro v9.0 - Full Exploitation')
     parser.add_argument('target', help='API base URL')
@@ -254,5 +265,7 @@ def main():
     print(f"\n{Fore.CYAN + Style.BRIGHT}{'='*140}")
     input("💥 API exploitation complete. Press Enter...")
 
+
 if __name__ == "__main__":
     main()
+

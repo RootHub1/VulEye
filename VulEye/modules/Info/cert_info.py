@@ -345,6 +345,17 @@ class SSLTLSUltimateAnalyzer:
         for rec in self.results['recommendations'][:4]:
             print(f"   {rec}")
 
+
+def run():
+    '''Wrapper function for main.py integration'''
+    try:
+        main()
+    except KeyboardInterrupt:
+        pass
+    except Exception as e:
+        print(f"Error: {e}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="🔒 HackerAI SSL/TLS Ultimate Analyzer")
     parser.add_argument("target", help="Hostname/IP (google.com or 192.168.1.1)")

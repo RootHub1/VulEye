@@ -242,6 +242,17 @@ class CSRFHunterPro:
         for poc in self.output_dir.glob("csrf_poc_*.html"):
             print(f"   PoC: {poc} {'🔥' if self.vulnerable_forms else ''}")
 
+
+def run():
+    '''Wrapper function for main.py integration'''
+    try:
+        main()
+    except KeyboardInterrupt:
+        pass
+    except Exception as e:
+        print(f"Error: {e}")
+
+
 def main():
     parser = argparse.ArgumentParser(description='🔥 CSRF Hunter Pro v8.0 - Full Exploitation')
     parser.add_argument('target', help='Target URL (app root)')

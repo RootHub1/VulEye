@@ -248,6 +248,17 @@ class ProSSRFScanner:
         else:
             print(f"{Fore.GREEN}[✓] SSRF не обнаружена{Style.RESET_ALL}")
 
+
+def run():
+    '''Wrapper function for main.py integration'''
+    try:
+        main()
+    except KeyboardInterrupt:
+        pass
+    except Exception as e:
+        print(f"Error: {e}")
+
+
 def main():
     parser = argparse.ArgumentParser(description='🔥 Pro SSRF Exploitation Framework')
     parser.add_argument('target', help='URL с параметрами (?param=)')

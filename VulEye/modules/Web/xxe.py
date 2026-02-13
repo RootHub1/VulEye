@@ -230,6 +230,17 @@ class AdvancedXXEScanner:
         else:
             print(f"{Fore.GREEN}[✓] No XXE vulnerabilities detected{Style.RESET_ALL}")
 
+
+def run():
+    '''Wrapper function for main.py integration'''
+    try:
+        main()
+    except KeyboardInterrupt:
+        pass
+    except Exception as e:
+        print(f"Error: {e}")
+
+
 def main():
     parser = argparse.ArgumentParser(description='Advanced XXE Exploitation Framework')
     parser.add_argument('target', help='Target XML endpoint (POST)')

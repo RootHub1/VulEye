@@ -246,6 +246,17 @@ class LFIHunterPro:
             print(f"{Fore.GREEN}[✓] No LFI detected (but manual testing recommended){Style.RESET_ALL}")
         print(f"{Fore.GREEN + Style.BRIGHT}{'='*100}")
 
+
+def run():
+    '''Wrapper function for main.py integration'''
+    try:
+        main()
+    except KeyboardInterrupt:
+        pass
+    except Exception as e:
+        print(f"Error: {e}")
+
+
 def main():
     parser = argparse.ArgumentParser(description='🔥 LFI Hunter Pro v6.0')
     parser.add_argument('target', help='Target URL (?file=test)')

@@ -314,6 +314,17 @@ class CMSUltimateDetector:
         print(f"\n{Fore.GREEN}✅ Professional report: {report}{Style.RESET_ALL}")
         print(f"{Fore.YELLOW}🎯 Ready for exploitation!{Style.RESET_ALL}")
 
+
+def run():
+    '''Wrapper function for main.py integration'''
+    try:
+        main()
+    except KeyboardInterrupt:
+        pass
+    except Exception as e:
+        print(f"Error: {e}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="🔥 HackerAI CMS Ultimate Detector")
     parser.add_argument("target", help="Target URL")

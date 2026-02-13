@@ -337,6 +337,17 @@ class UltimatePortScanner:
             json.dump(self.results, f, indent=2, default=str)
         print(f"{Fore.GREEN}✅ JSON Report: reports/{filename}{Style.RESET_ALL}")
 
+
+def run():
+    '''Wrapper function for main.py integration'''
+    try:
+        main()
+    except KeyboardInterrupt:
+        pass
+    except Exception as e:
+        print(f"Error: {e}")
+
+
 def main():
     print(f"{Fore.MAGENTA}{'='*100}")
     print(f"{Fore.YELLOW}🚀 HACKERAI ULTIMATE PORT SCANNER v7.0")

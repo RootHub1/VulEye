@@ -512,6 +512,17 @@ class UltimateXSSScanner:
         print(f"\n{Fore.GREEN}✅ Reports saved:{Style.RESET_ALL}")
         print(f"   📄 JSON: {json_path}")
 
+
+def run():
+    '''Wrapper function for main.py integration'''
+    try:
+        main()
+    except KeyboardInterrupt:
+        pass
+    except Exception as e:
+        print(f"Error: {e}")
+
+
 def main():
     print(f"{Fore.MAGENTA}{'='*100}")
     print(f"{Fore.YELLOW}🚀 HACKERAI ULTIMATE XSS SCANNER v5.0")

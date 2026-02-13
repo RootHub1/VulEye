@@ -268,6 +268,17 @@ class TLSUltimateScanner:
         report = self.save_report()
         print(f"\n{Fore.GREEN}✅ Full report: {report}{Style.RESET_ALL}")
 
+
+def run():
+    '''Wrapper function for main.py integration'''
+    try:
+        main()
+    except KeyboardInterrupt:
+        pass
+    except Exception as e:
+        print(f"Error: {e}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="🔒 HackerAI TLS Ultimate Scanner")
     parser.add_argument("target", help="Hostname/IP")

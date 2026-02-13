@@ -285,6 +285,17 @@ class TechStackUltimate:
             json.dump(self.results, f, indent=2, default=str)
         print(f"\n{Fore.GREEN}✅ Report saved: {filename}{Style.RESET_ALL}")
 
+
+def run():
+    '''Wrapper function for main.py integration'''
+    try:
+        main()
+    except KeyboardInterrupt:
+        pass
+    except Exception as e:
+        print(f"Error: {e}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="🔍 HackerAI TechStack Detector")
     parser.add_argument("target", help="Target URL")

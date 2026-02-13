@@ -334,6 +334,17 @@ class SQLiHunterPro:
         print(f"{Fore.YELLOW}📋 Уязвимые параметры: {self.confirmed_params}{Style.RESET_ALL}")
         print(f"{Fore.GREEN + Style.BRIGHT}{'='*100}")
 
+
+def run():
+    '''Wrapper function for main.py integration'''
+    try:
+        main()
+    except KeyboardInterrupt:
+        pass
+    except Exception as e:
+        print(f"Error: {e}")
+
+
 def main():
     parser = argparse.ArgumentParser(description='💉 SQLi Hunter Pro v4.0')
     parser.add_argument('target', help='Цель (?id=1)')

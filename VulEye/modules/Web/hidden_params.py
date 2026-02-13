@@ -364,6 +364,17 @@ class HiddenParamsScanner:
                 if file.get('secrets'):
                     print(f"     Secrets: {file['secrets']}")
 
+
+def run():
+    '''Wrapper function for main.py integration'''
+    try:
+        main()
+    except KeyboardInterrupt:
+        pass
+    except Exception as e:
+        print(f"Error: {e}")
+
+
 def main():
     parser = argparse.ArgumentParser(description='Профессиональный сканер скрытых параметров')
     parser.add_argument('target', nargs='?', help='Целевой URL')

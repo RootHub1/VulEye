@@ -320,6 +320,17 @@ class OWASP10HunterPro:
         print(f"\n{Fore.GREEN + Style.BRIGHT}📋 Полный отчет: {json_file}{Style.RESET_ALL}")
         print(f"{Fore.YELLOW}⚠️  MANUAL VERIFICATION REQUIRED{Style.RESET_ALL}")
 
+
+def run():
+    '''Wrapper function for main.py integration'''
+    try:
+        main()
+    except KeyboardInterrupt:
+        pass
+    except Exception as e:
+        print(f"Error: {e}")
+
+
 def main():
     parser = argparse.ArgumentParser(description='🚀 OWASP Top 10 Hunter Pro v5.0')
     parser.add_argument('target', help='Target URL')
