@@ -71,7 +71,7 @@ class AdvancedXXEScanner:
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             s.connect(("8.8.8.8", 80))
             return s.getsockname()[0]
-        except:
+        except Exception:
             return "127.0.0.1"
     
     def _generate_billion_laughs(self):
@@ -233,12 +233,43 @@ class AdvancedXXEScanner:
 
 def run():
     '''Wrapper function for main.py integration'''
+    print(f"\n{Fore.CYAN}{'='*80}")
+    print(f"{Fore.RED + Style.BRIGHT}🔥 ADVANCED XXE EXPLOITATION FRAMEWORK")
+    print(f"{Fore.CYAN}{'='*80}{Style.RESET_ALL}\n")
+    
     try:
-        main()
+        target = input(f"{Fore.YELLOW}🎯 Enter target XML endpoint (POST URL): {Style.RESET_ALL}").strip()
+        
+        if not target:
+            print(f"{Fore.RED}[!] Empty target. Aborting.{Style.RESET_ALL}")
+            input(f"{Fore.BLUE}Press Enter to return...{Style.RESET_ALL}")
+            return
+        
+        if not target.startswith(('http://', 'https://')):
+            target = 'http://' + target
+        
+        threads = input(f"{Fore.YELLOW}Threads (default 10): {Style.RESET_ALL}").strip()
+        threads = int(threads) if threads.isdigit() else 10
+        
+        timeout = input(f"{Fore.YELLOW}Timeout in seconds (default 15): {Style.RESET_ALL}").strip()
+        timeout = int(timeout) if timeout.isdigit() else 15
+        
+        verbose = input(f"{Fore.YELLOW}Verbose mode? (y/N): {Style.RESET_ALL}").strip().lower() == 'y'
+        
+        output = input(f"{Fore.YELLOW}Output report file (leave empty to skip): {Style.RESET_ALL}").strip()
+        
+        scanner = AdvancedXXEScanner(target, threads, timeout, verbose, output if output else None)
+        scanner.run_full_scan()
+        
+        print(f"\n{Fore.CYAN}{'='*80}")
+        input(f"{Fore.GREEN}✅ XXE scan complete! Press Enter to return to menu...{Style.RESET_ALL}")
+    
     except KeyboardInterrupt:
-        pass
+        print(f"\n{Fore.YELLOW}⚠️  Scan interrupted{Style.RESET_ALL}")
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"\n{Fore.RED}❌ Error: {e}{Style.RESET_ALL}")
+        import traceback
+        traceback.print_exc()
 
 
 def main():

@@ -37,7 +37,7 @@ def banner(title):
 def safe_resolve(name, rtype):
     try:
         return resolver.resolve(name, rtype)
-    except:
+    except Exception:
         return None
 
 
@@ -55,7 +55,7 @@ def test_zone_transfer(domain, ns_list):
             ip = socket.gethostbyname(ns)
             zone = dns.zone.from_xfr(dns.query.xfr(ip, domain, lifetime=10))
             return True, zone
-        except:
+        except Exception:
             continue
     return False, None
 
@@ -63,7 +63,7 @@ def dnssec_check(domain):
     try:
         dnskey = safe_resolve(domain, "DNSKEY")
         return dnskey is not None
-    except:
+    except Exception:
         return False
 
 def wildcard_check(domain):
@@ -72,7 +72,7 @@ def wildcard_check(domain):
     try:
         socket.gethostbyname(test)
         return True
-    except:
+    except Exception:
         return False
 
 def reverse_dns(ip):
@@ -81,7 +81,7 @@ def reverse_dns(ip):
         ans = safe_resolve(rev, "PTR")
         if ans:
             return str(ans[0]).rstrip(".")
-    except:
+    except Exception:
         pass
     return None
 
@@ -94,7 +94,7 @@ def subdomain_enum(domain):
         try:
             ip = socket.gethostbyname(host)
             found.append((host, ip))
-        except:
+        except Exception:
             pass
 
     return found, wildcard

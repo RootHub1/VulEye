@@ -64,7 +64,7 @@ def check_ports(host):
             if s.connect_ex((host, p)) == 0:
                 open_ports.append(p)
             s.close()
-        except:
+        except Exception:
             pass
     return open_ports
 

@@ -257,7 +257,7 @@ class UltimateXSSScanner:
                     resp = self.session.get(js_url, timeout=5)
                     if resp.status_code == 200:
                         all_js.append(resp.text)
-                except:
+                except Exception:
                     pass
         
         
@@ -316,7 +316,7 @@ class UltimateXSSScanner:
         try:
             clean_url = urllib.parse.urlunparse(parsed._replace(query=''))
             baseline_resp = self.session.get(clean_url, timeout=10)
-        except:
+        except Exception:
             pass
         
         for payload in payloads:
@@ -343,7 +343,7 @@ class UltimateXSSScanner:
                             'diff_size': abs(len(resp_text) - (baseline_resp.length if baseline_resp else 0))
                         })
                         break  
-            except:
+            except Exception:
                 continue
         
         return results
@@ -515,12 +515,35 @@ class UltimateXSSScanner:
 
 def run():
     '''Wrapper function for main.py integration'''
+    print(f"\n{Fore.MAGENTA}{'='*100}")
+    print(f"{Fore.YELLOW}🚀 HACKERAI ULTIMATE XSS SCANNER v5.0")
+    print(f"{Fore.GREEN}✅ FULLY AUTHORIZED PENTEST TOOLKIT")
+    print(f"{Fore.CYAN}📚 500+ Bypass Payloads • WAF Evasion • DOM Analysis • Source Parser")
+    print(f"{Fore.MAGENTA}{'='*100}{Style.RESET_ALL}\n")
+    
     try:
-        main()
+        target = input(f"{Fore.YELLOW}🎯 Target URL (with params): {Style.RESET_ALL}").strip()
+        
+        if not target:
+            print(f"{Fore.RED}[!] Empty target. Aborting.{Style.RESET_ALL}")
+            input(f"{Fore.BLUE}Press Enter to return...{Style.RESET_ALL}")
+            return
+        
+        if not target.startswith(('http://', 'https://')):
+            target = 'http://' + target
+        
+        scanner = UltimateXSSScanner()
+        scanner.run_full_scan(target)
+        
+        print(f"\n{Fore.MAGENTA}{'='*100}")
+        input(f"{Fore.GREEN}✅ XSS scan complete! Press Enter to return to menu...{Style.RESET_ALL}")
+    
     except KeyboardInterrupt:
-        pass
+        print(f"\n{Fore.YELLOW}⚠️  Scan interrupted{Style.RESET_ALL}")
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"\n{Fore.RED}❌ Error: {e}{Style.RESET_ALL}")
+        import traceback
+        traceback.print_exc()
 
 
 def main():

@@ -80,7 +80,7 @@ def test_error_trigger(url, payload, method='GET', json_data=None, session=None)
                 if health_resp.status_code >= 500:
                     print(f"\n{Fore.RED}[!] SERVER RETURNING 5xx ERRORS. STOPPING TO PREVENT DoS.{Style.RESET_ALL}")
                     return "OVERLOAD", None, None
-            except:
+            except Exception:
                 pass
             
             response = session.get(test_url, timeout=10, verify=False)
@@ -317,7 +317,7 @@ def get_context(content, pattern, context_size=150):
                 if len(lines) > 3:
                     context = '\n'.join(lines[:3]) + '...'
             return context
-    except:
+    except Exception:
         pass
     return None
 

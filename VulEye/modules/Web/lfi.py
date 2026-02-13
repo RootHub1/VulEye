@@ -106,7 +106,7 @@ class LFIHunterPro:
                         'snippet': self.extract_snippet(resp.text)
                     })
                 
-            except:
+            except Exception:
                 continue
         
         return findings
@@ -249,12 +249,42 @@ class LFIHunterPro:
 
 def run():
     '''Wrapper function for main.py integration'''
+    print(f"\n{Fore.CYAN}{'='*100}")
+    print(f"{Fore.RED + Style.BRIGHT}🔥 LFI HUNTER PRO v6.0 - LOCAL FILE INCLUSION TESTER{Style.RESET_ALL}")
+    print(f"{Fore.CYAN}{'='*100}{Style.RESET_ALL}\n")
+    
     try:
-        main()
+        target = input(f"{Fore.YELLOW}🎯 Enter target URL with parameters (?file=test): {Style.RESET_ALL}").strip()
+        
+        if not target:
+            print(f"{Fore.RED}[!] Empty target. Aborting.{Style.RESET_ALL}")
+            input(f"{Fore.BLUE}Press Enter to return...{Style.RESET_ALL}")
+            return
+        
+        if not target.startswith(('http://', 'https://')):
+            target = 'http://' + target
+        
+        threads = input(f"{Fore.YELLOW}Threads (default 200): {Style.RESET_ALL}").strip()
+        threads = int(threads) if threads.isdigit() else 200
+        
+        timeout = input(f"{Fore.YELLOW}Timeout in seconds (default 12): {Style.RESET_ALL}").strip()
+        timeout = int(timeout) if timeout.isdigit() else 12
+        
+        output_dir = input(f"{Fore.YELLOW}Output directory (default lfi_reports): {Style.RESET_ALL}").strip()
+        output_dir = output_dir if output_dir else "lfi_reports"
+        
+        hunter = LFIHunterPro(target, threads, timeout, output_dir)
+        hunter.run_full_hunt()
+        
+        print(f"\n{Fore.CYAN}{'='*100}")
+        input(f"{Fore.GREEN}✅ LFI scan complete! Press Enter to return to menu...{Style.RESET_ALL}")
+    
     except KeyboardInterrupt:
-        pass
+        print(f"\n{Fore.YELLOW}⚠️  Scan interrupted{Style.RESET_ALL}")
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"\n{Fore.RED}❌ Error: {e}{Style.RESET_ALL}")
+        import traceback
+        traceback.print_exc()
 
 
 def main():

@@ -84,7 +84,7 @@ class SSLTLSUltimateAnalyzer:
         
         try:
             analysis['key_size'] = cert.public_key().key_size
-        except:
+        except Exception:
             analysis['key_size'] = 0
             
         
@@ -94,14 +94,14 @@ class SSLTLSUltimateAnalyzer:
                 format=serialization.PublicFormat.SubjectPublicKeyInfo
             )
             analysis['sha256_fingerprint'] = hashlib.sha256(pub_bytes).hexdigest()
-        except:
+        except Exception:
             pass
             
         
         try:
             san_ext = cert.extensions.get_extension_for_oid(x509.oid.ExtensionOID.SUBJECT_ALTERNATIVE_NAME)
             analysis['san'] = [str(name) for name in san_ext.value.get_values_for_type(x509.DNSName)]
-        except:
+        except Exception:
             analysis['san'] = []
             
         
@@ -147,7 +147,7 @@ class SSLTLSUltimateAnalyzer:
                 with socket.create_connection((self.target, self.port), timeout=5) as sock:
                     with context.wrap_socket(sock, server_hostname=self.target) as ssock:
                         supported.append(name)
-            except:
+            except Exception:
                 continue
                 
         self.results['tls_versions'] = supported
@@ -164,7 +164,7 @@ class SSLTLSUltimateAnalyzer:
             if nm[self.target]['tcp'][self.port].get('script', {}).get('ssl-heartbleed'):
                 vulns.append('HEARTBLEED')
                 self.results['msf_modules'].append('auxiliary/scanner/ssl/openssl_heartbleed')
-        except:
+        except Exception:
             pass
             
         
@@ -200,7 +200,7 @@ class SSLTLSUltimateAnalyzer:
                 with socket.create_connection((self.target, self.port), timeout=5) as sock:
                     with context.wrap_socket(sock, server_hostname=self.target) as ssock:
                         weak.append(cipher)
-            except:
+            except Exception:
                 pass
                 
         self.results['ciphers'] = weak

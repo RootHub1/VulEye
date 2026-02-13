@@ -38,7 +38,7 @@ def check_port(host, port):
         open_ = s.connect_ex((host, port)) == 0
         s.close()
         return open_
-    except:
+    except Exception:
         return False
 
 
@@ -73,7 +73,7 @@ def smb_enum(target):
                 "os": getattr(info, "os_version", ""),
                 "server_type": getattr(info, "server_type", "")
             }
-        except:
+        except Exception:
             pass
 
         

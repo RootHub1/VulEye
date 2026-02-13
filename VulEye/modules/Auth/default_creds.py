@@ -75,7 +75,7 @@ def test_login(url, username, password):
                     return True
 
         return False
-    except:
+    except Exception:
         return None
 
 

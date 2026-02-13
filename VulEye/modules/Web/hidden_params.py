@@ -210,7 +210,7 @@ class HiddenParamsScanner:
                             'status': resp.status_code
                         })
                     time.sleep(0.2)
-                except:
+                except Exception:
                     continue
         
         return findings
@@ -240,7 +240,7 @@ class HiddenParamsScanner:
                         'preview': content_preview[:100]
                     })
                     
-            except:
+            except Exception:
                 continue
 
     def assess_risk(self, content):

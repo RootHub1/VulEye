@@ -95,7 +95,7 @@ class UltimatePortScanner:
             
             if banner:
                 return banner[:100] 
-        except:
+        except Exception:
             pass
         return None
 
@@ -117,7 +117,7 @@ class UltimatePortScanner:
                         'product': host['tcp'][str(port)].get('product', ''),
                         'version': host['tcp'][str(port)].get('version', '')
                     }
-        except:
+        except Exception:
             pass
         return None
 
@@ -149,7 +149,7 @@ class UltimatePortScanner:
                     'nmap': nmap_info,
                     'risk': self.assess_port_risk(port, banner, nmap_info)
                 }
-        except:
+        except Exception:
             pass
         return None
 

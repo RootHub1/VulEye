@@ -174,7 +174,7 @@ class TechStackUltimate:
                 resp = self.session.get(urljoin(self.target, url), timeout=5)
                 if resp.status_code == 200:
                     found.append({'url': url, 'status': resp.status_code, 'title': BeautifulSoup(resp.text, 'html.parser').title})
-            except:
+            except Exception:
                 pass
         
         with ThreadPoolExecutor(max_workers=self.threads) as executor:
@@ -192,7 +192,7 @@ class TechStackUltimate:
             result = subprocess.run(['wpscan', '--url', self.target, '--enumerate', 'vp', '--no-banner', '--quiet'], 
                                   capture_output=True, text=True, timeout=300)
             self.results['wpscan_output'] = result.stdout
-        except:
+        except Exception:
             pass
 
     def calculate_risk(self):

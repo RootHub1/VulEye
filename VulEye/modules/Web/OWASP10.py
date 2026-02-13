@@ -85,7 +85,7 @@ class OWASP10HunterPro:
                 resp = self.session.get(url, timeout=self.timeout)
                 if resp.status_code in [200, 302, 401, 403]:
                     return f"🔴 {path} ({resp.status_code}) - ACCESSIBLE!"
-            except:
+            except Exception:
                 pass
             return None
         
@@ -119,7 +119,7 @@ class OWASP10HunterPro:
                     proto = ssock.version()
                     if proto in ["TLSv1", "TLSv1.1"]:
                         findings.append(f"🔴 Weak TLS: {proto}")
-        except:
+        except Exception:
             findings.append("❓ TLS check failed")
         
         if findings:
@@ -168,7 +168,7 @@ class OWASP10HunterPro:
                             'diff': abs(len(resp.text) - baseline['length'])
                         })
                         break
-                except:
+                except Exception:
                     continue
         
         with ThreadPoolExecutor(max_workers=self.threads//5) as executor:
@@ -323,12 +323,42 @@ class OWASP10HunterPro:
 
 def run():
     '''Wrapper function for main.py integration'''
+    print(f"\n{Fore.CYAN}{'='*100}")
+    print(f"{Fore.RED + Style.BRIGHT}🚀 OWASP TOP 10 HUNTER PRO v5.0{Style.RESET_ALL}")
+    print(f"{Fore.CYAN}{'='*100}{Style.RESET_ALL}\n")
+    
     try:
-        main()
+        target = input(f"{Fore.YELLOW}🎯 Enter target URL: {Style.RESET_ALL}").strip()
+        
+        if not target:
+            print(f"{Fore.RED}[!] Empty target. Aborting.{Style.RESET_ALL}")
+            input(f"{Fore.BLUE}Press Enter to return...{Style.RESET_ALL}")
+            return
+        
+        if not target.startswith(('http://', 'https://')):
+            target = 'http://' + target
+        
+        threads = input(f"{Fore.YELLOW}Threads (default 200): {Style.RESET_ALL}").strip()
+        threads = int(threads) if threads.isdigit() else 200
+        
+        timeout = input(f"{Fore.YELLOW}Timeout in seconds (default 10): {Style.RESET_ALL}").strip()
+        timeout = int(timeout) if timeout.isdigit() else 10
+        
+        output_dir = input(f"{Fore.YELLOW}Output directory (default owasp_reports): {Style.RESET_ALL}").strip()
+        output_dir = output_dir if output_dir else "owasp_reports"
+        
+        hunter = OWASP10HunterPro(target, threads, timeout, output_dir)
+        hunter.run_full_hunt()
+        
+        print(f"\n{Fore.CYAN}{'='*100}")
+        input(f"{Fore.GREEN}✅ Scan complete! Press Enter to return to menu...{Style.RESET_ALL}")
+    
     except KeyboardInterrupt:
-        pass
+        print(f"\n{Fore.YELLOW}⚠️  Scan interrupted{Style.RESET_ALL}")
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"\n{Fore.RED}❌ Error: {e}{Style.RESET_ALL}")
+        import traceback
+        traceback.print_exc()
 
 
 def main():

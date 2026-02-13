@@ -80,7 +80,7 @@ class APIHunterPro:
                 if resp.status_code in [200, 201, 302, 401, 403]:
                     print(f"{Fore.GREEN}[✓] {path} → {resp.status_code}{Style.RESET_ALL}")
                     return url
-            except:
+            except Exception:
                 pass
             return None
         
@@ -116,7 +116,7 @@ class APIHunterPro:
                         'cvss': 9.1
                     })
                     print(f"{Fore.RED + Style.BRIGHT}💥 GraphQL VULN: {payload['query'][:50]}...{Style.RESET_ALL}")
-            except:
+            except Exception:
                 pass
     
     def idor_hunter(self, endpoints):
@@ -141,7 +141,7 @@ class APIHunterPro:
                             })
                             print(f"{Fore.RED + Style.BRIGHT}💥 IDOR: {url}{Style.RESET_ALL}")
                             return True
-                except:
+                except Exception:
                     pass
             return False
         
@@ -169,7 +169,7 @@ class APIHunterPro:
                             'url': full_path,
                             'cvss': 7.5
                         })
-            except:
+            except Exception:
                 pass
     
     def auth_bypass(self, endpoints):
@@ -242,12 +242,42 @@ class APIHunterPro:
 
 def run():
     '''Wrapper function for main.py integration'''
+    print(f"\n{Fore.RED + Style.BRIGHT}{'='*140}")
+    print(f"{Fore.RED + Style.BRIGHT}🔥 API HUNTER PRO v9.0 - FULL EXPLOITATION FRAMEWORK 🔥")
+    print(f"{Fore.CYAN}{'='*140}{Style.RESET_ALL}\n")
+    
     try:
-        main()
+        target = input(f"{Fore.YELLOW}🎯 Enter API base URL (e.g., https://api.example.com): {Style.RESET_ALL}").strip()
+        
+        if not target:
+            print(f"{Fore.RED}[!] Empty target. Aborting.{Style.RESET_ALL}")
+            input(f"{Fore.BLUE}Press Enter to return...{Style.RESET_ALL}")
+            return
+        
+        if not target.startswith(('http://', 'https://')):
+            target = 'http://' + target
+        
+        threads = input(f"{Fore.YELLOW}Threads (default 500): {Style.RESET_ALL}").strip()
+        threads = int(threads) if threads.isdigit() else 500
+        
+        timeout = input(f"{Fore.YELLOW}Timeout in seconds (default 10): {Style.RESET_ALL}").strip()
+        timeout = int(timeout) if timeout.isdigit() else 10
+        
+        output_dir = input(f"{Fore.YELLOW}Output directory (default api_exploits): {Style.RESET_ALL}").strip()
+        output_dir = output_dir if output_dir else "api_exploits"
+        
+        hunter = APIHunterPro(target, threads, timeout, output_dir)
+        hunter.run_full_api_hunt()
+        
+        print(f"\n{Fore.CYAN + Style.BRIGHT}{'='*140}")
+        input(f"{Fore.GREEN}✅ API exploitation complete! Press Enter to return to menu...{Style.RESET_ALL}")
+    
     except KeyboardInterrupt:
-        pass
+        print(f"\n{Fore.YELLOW}⚠️  Scan interrupted{Style.RESET_ALL}")
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"\n{Fore.RED}❌ Error: {e}{Style.RESET_ALL}")
+        import traceback
+        traceback.print_exc()
 
 
 def main():

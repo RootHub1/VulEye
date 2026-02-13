@@ -119,7 +119,7 @@ class SQLiHunterPro:
                     })
                     self.confirmed_params.append(param)
                     break
-            except:
+            except Exception:
                 continue
         
         return results
@@ -149,7 +149,7 @@ class SQLiHunterPro:
                     })
                     self.confirmed_params.append(param)
                     break
-            except:
+            except Exception:
                 continue
         
         return results
@@ -179,7 +179,7 @@ class SQLiHunterPro:
                     })
                     self.confirmed_params.append(param)
                     break
-            except:
+            except Exception:
                 continue
         
         return results
@@ -225,7 +225,7 @@ class SQLiHunterPro:
                             'url': test_url,
                             'response_snippet': resp.text[:300]
                         })
-                except:
+                except Exception:
                     continue
         
         return exploits
@@ -337,12 +337,42 @@ class SQLiHunterPro:
 
 def run():
     '''Wrapper function for main.py integration'''
+    print(f"\n{Fore.CYAN}{'='*100}")
+    print(f"{Fore.RED + Style.BRIGHT}💉 SQLi HUNTER PRO v4.0{Style.RESET_ALL}")
+    print(f"{Fore.CYAN}{'='*100}{Style.RESET_ALL}\n")
+    
     try:
-        main()
+        target = input(f"{Fore.YELLOW}🎯 Enter target URL with parameters (?param=value): {Style.RESET_ALL}").strip()
+        
+        if not target:
+            print(f"{Fore.RED}[!] Empty target. Aborting.{Style.RESET_ALL}")
+            input(f"{Fore.BLUE}Press Enter to return...{Style.RESET_ALL}")
+            return
+        
+        if not target.startswith(('http://', 'https://')):
+            target = 'http://' + target
+        
+        threads = input(f"{Fore.YELLOW}Threads (default 100): {Style.RESET_ALL}").strip()
+        threads = int(threads) if threads.isdigit() else 100
+        
+        timeout = input(f"{Fore.YELLOW}Timeout (default 15): {Style.RESET_ALL}").strip()
+        timeout = int(timeout) if timeout.isdigit() else 15
+        
+        output_dir = input(f"{Fore.YELLOW}Output directory (default sqli_reports): {Style.RESET_ALL}").strip()
+        output_dir = output_dir if output_dir else "sqli_reports"
+        
+        hunter = SQLiHunterPro(target, threads, timeout, output_dir)
+        hunter.run_full_attack()
+        
+        print(f"\n{Fore.CYAN}{'='*100}")
+        input(f"{Fore.GREEN}✅ Scan complete! Press Enter to return to menu...{Style.RESET_ALL}")
+    
     except KeyboardInterrupt:
-        pass
+        print(f"\n{Fore.YELLOW}⚠️  Scan interrupted{Style.RESET_ALL}")
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"\n{Fore.RED}❌ Error: {e}{Style.RESET_ALL}")
+        import traceback
+        traceback.print_exc()
 
 
 def main():

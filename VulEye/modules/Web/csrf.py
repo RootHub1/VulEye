@@ -81,7 +81,7 @@ class CSRFHunterPro:
                     'type': 'AJAX'
                 })
                 
-        except:
+        except Exception:
             pass
         
         return forms
@@ -105,7 +105,7 @@ class CSRFHunterPro:
             
             if resp.status_code in [200, 302, 201]:
                 return True
-        except:
+        except Exception:
             pass
         
         return False

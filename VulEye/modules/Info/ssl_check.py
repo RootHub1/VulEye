@@ -62,7 +62,7 @@ class TLSUltimateScanner:
                 with ctx.wrap_socket(sock, server_hostname=self.host) as ssock:
                     cipher = ssock.cipher()
                     return True, ssock.version(), (cipher[0] if cipher else 'Unknown', cipher[1] if cipher else '', cipher[2] if cipher else 0)
-        except:
+        except Exception:
             return False, None, None
 
     def scan_tls_versions(self):

@@ -51,13 +51,13 @@ def wildcard_check(domain):
     try:
         socket.gethostbyname(random_sub(domain))
         return True
-    except:
+    except Exception:
         return False
 
 def reverse_dns(ip):
     try:
         return socket.gethostbyaddr(ip)[0]
-    except:
+    except Exception:
         return None
 
 def http_probe(host):
@@ -75,7 +75,7 @@ def http_probe(host):
                 if m:
                     title = m.group(1)[:60]
             return scheme.upper(), r.status_code, title
-        except:
+        except Exception:
             pass
     return None, None, None
 
@@ -90,7 +90,7 @@ def worker(domain, q, lock):
             cname = None
             try:
                 cname = socket.gethostbyname_ex(host)[0]
-            except:
+            except Exception:
                 pass
 
             proto, status, title = http_probe(host)
@@ -131,7 +131,7 @@ def worker(domain, q, lock):
                 if takeover:
                     print(f"    {Fore.RED}[!] TAKEOVER POSSIBLE{Style.RESET_ALL}")
 
-        except:
+        except Exception:
             pass
         finally:
             q.task_done()

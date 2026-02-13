@@ -76,7 +76,7 @@ class ProSSRFScanner:
             ip = s.getsockname()[0]
             s.close()
             return ip
-        except:
+        except Exception:
             return "127.0.0.1"
     
     def generate_oob_payloads(self):
@@ -105,7 +105,7 @@ class ProSSRFScanner:
                         self.oob_hits.append(hit)
                         print(f"{Fore.RED + Style.BRIGHT}[OOB HIT!] {hit}{Style.RESET_ALL}")
                         conn.close()
-                    except:
+                    except Exception:
                         break
         
         thread = threading.Thread(target=listener, daemon=True)
@@ -251,12 +251,47 @@ class ProSSRFScanner:
 
 def run():
     '''Wrapper function for main.py integration'''
+    print(f"\n{Fore.CYAN}{'='*100}")
+    print(f"{Fore.RED + Style.BRIGHT}🔥 PRO SSRF EXPLOITATION FRAMEWORK{Style.RESET_ALL}")
+    print(f"{Fore.CYAN}{'='*100}{Style.RESET_ALL}\n")
+    
     try:
-        main()
+        target = input(f"{Fore.YELLOW}🎯 Enter target URL with parameters (?param=value): {Style.RESET_ALL}").strip()
+        
+        if not target:
+            print(f"{Fore.RED}[!] Empty target. Aborting.{Style.RESET_ALL}")
+            input(f"{Fore.BLUE}Press Enter to return...{Style.RESET_ALL}")
+            return
+        
+        if not target.startswith(('http://', 'https://')):
+            target = 'http://' + target
+        
+        if not target.rstrip('?').find('?') != -1:
+            print(f"{Fore.YELLOW}[!] Warning: URL doesn't contain parameters{Style.RESET_ALL}")
+        
+        threads = input(f"{Fore.YELLOW}Threads (default 20): {Style.RESET_ALL}").strip()
+        threads = int(threads) if threads.isdigit() else 20
+        
+        timeout = input(f"{Fore.YELLOW}Timeout in seconds (default 12): {Style.RESET_ALL}").strip()
+        timeout = int(timeout) if timeout.isdigit() else 12
+        
+        output = input(f"{Fore.YELLOW}Output JSON file (leave empty to skip): {Style.RESET_ALL}").strip()
+        
+        oob_port = input(f"{Fore.YELLOW}OOB port for callback (default 8080): {Style.RESET_ALL}").strip()
+        oob_port = int(oob_port) if oob_port.isdigit() else 8080
+        
+        scanner = ProSSRFScanner(target, threads, timeout, output if output else None, oob_port)
+        scanner.run_attack()
+        
+        print(f"\n{Fore.CYAN}{'='*100}")
+        input(f"{Fore.GREEN}✅ SSRF scan complete! Press Enter to return to menu...{Style.RESET_ALL}")
+    
     except KeyboardInterrupt:
-        pass
+        print(f"\n{Fore.YELLOW}⚠️  Scan interrupted{Style.RESET_ALL}")
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"\n{Fore.RED}❌ Error: {e}{Style.RESET_ALL}")
+        import traceback
+        traceback.print_exc()
 
 
 def main():

@@ -116,7 +116,7 @@ class CMSUltimateDetector:
         try:
             resp = self.session.get(url, timeout=10)
             return resp.status_code, resp.text, dict(resp.headers), resp.cookies
-        except:
+        except Exception:
             return 0, '', {}, None
 
     def detect_cms_tech(self, status, text, headers, cookies):

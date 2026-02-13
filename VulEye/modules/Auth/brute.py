@@ -53,7 +53,7 @@ def ssh_bruteforce(host, port, user, password, found_flag, lock_obj):
                 found_flag[0] = True
         client.close()
         return True
-    except:
+    except Exception:
         return False
 
 def ssh_worker(host, port, user_queue, pass_list, found_flag, lock_obj):
@@ -79,7 +79,7 @@ def ftp_bruteforce(host, port, user, password, found_flag, lock_obj):
                 found_flag[0] = True
         ftp.quit()
         return True
-    except:
+    except Exception:
         return False
 
 def ftp_worker(host, port, user_queue, pass_list, found_flag, lock_obj):
@@ -104,7 +104,7 @@ def http_bruteforce(url, user_field, pass_field, user, password, fail_string, fo
                     print(f"\n[✓] HTTP SUCCESS → {user}:{password}")
                     found_flag[0] = True
             return True
-    except:
+    except Exception:
         pass
     return False
 
@@ -127,7 +127,7 @@ def rdp_check(host, port):
         result = sock.connect_ex((host, port))
         sock.close()
         return result == 0
-    except:
+    except Exception:
         return False
 
 
