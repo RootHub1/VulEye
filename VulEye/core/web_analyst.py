@@ -8,8 +8,7 @@ import os
 import shutil
 from urllib.parse import urljoin, urlparse, parse_qs
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from bs4 import BeautifulSoup
-import yaml
+from bs4 import BeautifulSoupd
 import hashlib
 from typing import List, Dict, Set
 import base64
